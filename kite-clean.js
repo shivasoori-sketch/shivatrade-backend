@@ -271,7 +271,7 @@
     return Math.max(24, Math.min(96, Math.floor((width || 320) / 8)));
   }
   function kiteVisibleRange(last, span) {
-    return { from: last - span, to: last };
+    return { from: last - span, to: last + 1 };
   }
   function syncKitePriceScaleWidth() {
     var targets = chartTargets();
