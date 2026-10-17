@@ -1814,6 +1814,11 @@
       var card = host.querySelector('.order-card, .exec');
       if (!card) return;
       if (card.querySelector('.kiteRow')) {
+        var staleNote = card.querySelector('.kiteRow .kiteLotNote');
+        if (staleNote) {
+          staleNote.hidden = true;
+          card.append(staleNote);
+        }
         ensureKiteEntryControls(spec[1], spec[0]);
         hookKiteEntryButtons(spec[1]);
         fillRow2(card);
@@ -1878,7 +1883,9 @@
       });
       var block = el('div', '', 'kiteBlock');
       block.hidden = true;
-      row.append(strikePop, limit, stepper, note, actions);
+      note.hidden = true;
+      card.append(note);
+      row.append(strikePop, limit, stepper, actions);
       card.insertBefore(block, card.firstChild);
       card.insertBefore(row, card.firstChild);
       applyKiteEntryMode(spec[1]);
@@ -2364,7 +2371,7 @@
   var late = document.createElement('style');
   late.textContent = 'html body.kite-clean .order-card>:not(.kiteRow):not(.kiteRow2):not(.kiteBlock),html body.kite-clean .exec>:not(.kiteRow):not(.kiteRow2):not(.kiteBlock),html body.kite-clean .manual-heading,html body.kite-clean .manual-brokers,html body.kite-clean .manual-note,html body.kite-clean .manual-badge,html body.kite-clean .manual-trade,html body.kite-clean .manual-card-header,html body.kite-clean .manual-input-row,html body.kite-clean .manual-size-line,html body.kite-clean .manual-quantity,html body.kite-clean .separate-mtm-row,html body.kite-clean .manual-inline-status,html body.kite-clean .manual-accounts,html body.kite-clean .manual-card-details,html body.kite-clean .manual-trail-group,html body.kite-clean .manual-trail-bar,html body.kite-clean .levels,html body.kite-clean .chip,html body.kite-clean .manual-result,html body.kite-clean .manual-hint,html body.kite-clean .card-target,html body.kite-clean .entry-options,html body.kite-clean .card-bottom{display:none!important;}'
     + 'html body.kite-clean #kiteTickets{min-height:132px!important;height:auto!important;max-height:none!important;padding:8px 10px 14px!important;box-sizing:border-box!important;overflow:visible!important;align-items:stretch!important;grid-template-columns:minmax(0,1fr) max-content minmax(0,1fr)!important;}'
-    + 'html body.kite-clean .kiteRow{display:grid!important;grid-template-columns:auto 120px minmax(150px,auto) minmax(68px,auto) minmax(0,0.25fr) minmax(332px,1.25fr)!important;align-items:center!important;gap:4px!important;min-height:60px!important;height:auto!important;max-height:none!important;overflow:visible!important;background:#fff!important;min-width:0!important;}'
+    + 'html body.kite-clean .kiteRow{display:grid!important;grid-template-columns:auto 112px minmax(132px,auto) 56px minmax(0,1fr)!important;align-items:center!important;gap:4px!important;min-height:60px!important;height:auto!important;max-height:none!important;overflow:hidden!important;background:#fff!important;min-width:0!important;width:100%!important;max-width:100%!important;box-sizing:border-box!important;}'
     + 'html body.kite-clean .kiteLotNote{display:none!important;}'
     + 'html body.kite-clean .kiteCheck{gap:2px!important;font-size:12px!important;font-weight:700!important;}html body.kite-clean .kiteCheck input{width:13px!important;height:13px!important;flex:0 0 13px!important;}'
     + 'html body.kite-clean .kiteStrike{width:136px!important;min-width:136px!important;}'
@@ -2392,8 +2399,9 @@
     + 'html body.kite-clean #holdExitBar,html body.kite-clean .toolbar,html body.kite-clean .context,html body.kite-clean #kiteHold{display:none!important;}'
     + 'html body.kite-multi #kitePills label{font-size:0!important;}'
     + 'html body.kite-multi #kitePills .kiteWord{font-size:11px!important;}'
-    + 'html body.kite-clean .kiteActions{display:grid!important;grid-template-columns:minmax(158px,1fr) minmax(158px,1fr)!important;width:100%!important;min-width:332px!important;gap:8px!important;margin:0!important;}'
-    + 'html body.kite-clean .kiteActions>button{box-sizing:border-box!important;width:100%!important;min-width:158px!important;max-width:none!important;height:58px!important;min-height:58px!important;max-height:none!important;flex:none!important;overflow:visible!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:2px!important;white-space:nowrap!important;text-overflow:clip!important;padding:5px 10px!important;font-size:12px!important;font-weight:700!important;line-height:1.2!important;letter-spacing:0!important;}'
+    + 'html body.kite-clean .kiteActions{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;width:100%!important;min-width:0!important;max-width:100%!important;gap:6px!important;margin:0!important;}'
+    + 'html body.kite-clean .kiteActions>button{box-sizing:border-box!important;width:100%!important;min-width:0!important;max-width:100%!important;height:58px!important;min-height:58px!important;max-height:none!important;flex:none!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:2px!important;white-space:nowrap!important;text-overflow:ellipsis!important;padding:5px 6px!important;font-size:12px!important;font-weight:700!important;line-height:1.2!important;letter-spacing:0!important;}'
+    + 'html body.kite-clean .manual-actions:empty{display:none!important;}'
     + 'html body.kite-clean .kiteActions>button .kiteBtnMain{display:block!important;white-space:nowrap!important;overflow:visible!important;text-overflow:clip!important;font-size:12px!important;font-weight:700!important;line-height:1.15!important;}'
     + 'html body.kite-clean .kiteActions>button small{display:block!important;white-space:nowrap!important;overflow:visible!important;text-overflow:clip!important;font-size:10px!important;font-weight:550!important;max-width:none!important;line-height:1.1!important;opacity:.92!important;}'
     + 'html body.kite-clean .drawing-editor{position:absolute!important;top:4px!important;left:4px!important;right:auto!important;width:max-content!important;max-width:calc(100% - 96px)!important;display:flex!important;flex-wrap:wrap!important;overflow:visible!important;z-index:30!important;}'

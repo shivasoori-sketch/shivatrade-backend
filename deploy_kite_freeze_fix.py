@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-VERSION = "layout-20261017l"
+VERSION = "layout-20261017m"
 RELEASE = Path("/opt/shivtrade/releases/20261008_mc325_readonly_charts_r94")
 PY = RELEASE / "mc325_readonly.py"
 KITE_JS = RELEASE / "mc325" / "assets" / "kite-clean.js"
