@@ -259,12 +259,18 @@
       multiOpen.click();
       return;
     }
+    var dialog = document.querySelector('dialog.mtm-dialog');
     var hidden = document.querySelector('button.portfolio-mtm-button');
     if (hidden) {
-      hidden.click();
-      return;
+      if (typeof hidden.onclick === 'function') {
+        try {
+          hidden.onclick.call(hidden, new Event('click'));
+        } catch (err) {
+          hidden.click();
+        }
+      } else hidden.click();
     }
-    var dialog = document.querySelector('dialog.mtm-dialog');
+    if (dialog && dialog.open) return;
     if (dialog && dialog.showModal) dialog.showModal();
   }
   function kiteChartSpan(width) {
@@ -1242,7 +1248,8 @@
       var mode = document.createElement('select');
       mode.className = 'kiteOrderType';
       mode.setAttribute('aria-label', side + ' order type');
-      mode.innerHTML = '<option value="LIMIT">Limit</option><option value="MARKET">Market</option>';
+      mode.innerHTML = '<option value="MARKET">Market</option><option value="LIMIT">Limit</option>';
+      mode.value = 'LIMIT';
       limit.replaceChildren(mode);
       var price = document.createElement('input');
       price.type = 'text';
@@ -1793,6 +1800,7 @@
     if (trail.dataset.kiteTrailOpen !== '1') {
       trail.dataset.kiteTrailOpen = '1';
       trail.addEventListener('click', function (event) {
+        if (event.target.closest('.manual-trail-save, .manual-trail-bar')) return;
         event.preventDefault();
         event.stopPropagation();
         openTrailSettings(card);
@@ -1820,7 +1828,8 @@
       var mode = document.createElement('select');
       mode.className = 'kiteOrderType';
       mode.setAttribute('aria-label', spec[0] + ' order type');
-      mode.innerHTML = '<option value="LIMIT">Limit</option><option value="MARKET">Market</option>';
+      mode.innerHTML = '<option value="MARKET">Market</option><option value="LIMIT">Limit</option>';
+      mode.value = 'LIMIT';
       var price = document.createElement('input');
       price.type = 'text';
       price.inputMode = 'decimal';
@@ -2060,6 +2069,25 @@
   }).observe(tickets, { childList: true });
   ticketPaintTimer = setInterval(paintTicketDynamic, 1200);
   dressTickets();
+  if (!tickets.dataset.kiteTicketHooks) {
+    tickets.dataset.kiteTicketHooks = '1';
+    tickets.addEventListener('click', function (event) {
+      var mtm = event.target.closest('.kiteMtm');
+      if (mtm) {
+        event.preventDefault();
+        event.stopPropagation();
+        openMtmSettings();
+        return;
+      }
+      var trail = event.target.closest('.kiteRow2 .manual-trail-toggle');
+      if (!trail || event.target.closest('.manual-trail-save, .manual-trail-bar')) return;
+      var card = trail.closest('.order-card, .exec');
+      if (!card) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openTrailSettings(card);
+    }, true);
+  }
   [call, put].forEach(function (host) {
     host.querySelectorAll('.manual-buy, .manual-sell, .buy, .sell').forEach(function (button) {
       new MutationObserver(function () { syncButtonMargin(button); }).observe(button, { attributes: true, attributeFilter: ['data-req-margin'] });
@@ -2336,7 +2364,7 @@
   var late = document.createElement('style');
   late.textContent = 'html body.kite-clean .order-card>:not(.kiteRow):not(.kiteRow2):not(.kiteBlock),html body.kite-clean .exec>:not(.kiteRow):not(.kiteRow2):not(.kiteBlock),html body.kite-clean .manual-heading,html body.kite-clean .manual-brokers,html body.kite-clean .manual-note,html body.kite-clean .manual-badge,html body.kite-clean .manual-trade,html body.kite-clean .manual-card-header,html body.kite-clean .manual-input-row,html body.kite-clean .manual-size-line,html body.kite-clean .manual-quantity,html body.kite-clean .separate-mtm-row,html body.kite-clean .manual-inline-status,html body.kite-clean .manual-accounts,html body.kite-clean .manual-card-details,html body.kite-clean .manual-trail-group,html body.kite-clean .manual-trail-bar,html body.kite-clean .levels,html body.kite-clean .chip,html body.kite-clean .manual-result,html body.kite-clean .manual-hint,html body.kite-clean .card-target,html body.kite-clean .entry-options,html body.kite-clean .card-bottom{display:none!important;}'
     + 'html body.kite-clean #kiteTickets{min-height:132px!important;height:auto!important;max-height:none!important;padding:8px 10px 14px!important;box-sizing:border-box!important;overflow:visible!important;align-items:stretch!important;grid-template-columns:minmax(0,1fr) max-content minmax(0,1fr)!important;}'
-    + 'html body.kite-clean .kiteRow{display:grid!important;grid-template-columns:auto 120px auto minmax(68px,auto) minmax(0,0.25fr) minmax(332px,1.25fr)!important;align-items:center!important;gap:4px!important;min-height:60px!important;height:auto!important;max-height:none!important;overflow:visible!important;background:#fff!important;min-width:0!important;}'
+    + 'html body.kite-clean .kiteRow{display:grid!important;grid-template-columns:auto 120px minmax(150px,auto) minmax(68px,auto) minmax(0,0.25fr) minmax(332px,1.25fr)!important;align-items:center!important;gap:4px!important;min-height:60px!important;height:auto!important;max-height:none!important;overflow:visible!important;background:#fff!important;min-width:0!important;}'
     + 'html body.kite-clean .kiteLotNote{display:none!important;}'
     + 'html body.kite-clean .kiteCheck{gap:2px!important;font-size:12px!important;font-weight:700!important;}html body.kite-clean .kiteCheck input{width:13px!important;height:13px!important;flex:0 0 13px!important;}'
     + 'html body.kite-clean .kiteStrike{width:136px!important;min-width:136px!important;}'
@@ -2389,10 +2417,14 @@
     + 'html body.kite-clean #kiteSettingsPop[hidden]{display:none!important;}'
     + 'html body.kite-clean .kiteSettingsSheet{position:relative!important;max-width:min(520px,96vw)!important;background:var(--screen-surface,#fff)!important;color:var(--ink,#243348)!important;border:1px solid var(--screen-edge,#c8d1de)!important;border-radius:10px!important;padding:12px 12px 10px!important;box-shadow:0 10px 28px rgba(15,23,42,.22)!important;}'
     + 'html body.kite-clean .kiteSettingsClose{position:absolute!important;right:8px!important;top:6px!important;min-width:28px!important;min-height:28px!important;border:0!important;background:transparent!important;color:var(--ink,#243348)!important;font-size:16px!important;}'
-    + 'html body.kite-clean .manual-trail-bar.kite-settings-open{display:flex!important;flex-wrap:wrap!important;gap:6px!important;align-items:center!important;background:transparent!important;border:0!important;padding:0!important;}'
-    + 'html body.kite-clean .manual-trail-bar.kite-settings-open label,html body.kite-clean .manual-trail-bar.kite-settings-open select,html body.kite-clean .manual-trail-bar.kite-settings-open input,html body.kite-clean .manual-trail-bar.kite-settings-open button{background:var(--screen-alt,#edf1f6)!important;color:var(--ink,#243348)!important;border:1px solid var(--screen-edge,#c8d1de)!important;}'
-    + 'html body.kite-clean .kiteLimit{display:inline-flex!important;align-items:center!important;gap:4px!important;min-width:0!important;}'
-    + 'html body.kite-clean .kiteOrderType{height:26px!important;min-width:68px!important;padding:0 6px!important;font-size:12px!important;font-weight:650!important;border:1px solid #c5ced8!important;border-radius:2px!important;background:#fff!important;color:#1f2937!important;}'
+    + 'html body.kite-clean #kiteSettingsPop .manual-trail-bar,html body.kite-clean .manual-trail-bar.kite-settings-open{display:flex!important;flex-wrap:wrap!important;gap:8px!important;align-items:center!important;background:transparent!important;border:0!important;padding:4px 0!important;}'
+    + 'html body.kite-clean #kiteSettingsPop .manual-trail-bar label,html body.kite-clean .manual-trail-bar.kite-settings-open label{font-size:12px!important;font-weight:600!important;color:var(--ink,#243348)!important;display:inline-flex!important;align-items:center!important;gap:4px!important;}'
+    + 'html body.kite-clean #kiteSettingsPop .manual-trail-bar label,html body.kite-clean #kiteSettingsPop .manual-trail-bar select,html body.kite-clean #kiteSettingsPop .manual-trail-bar input,html body.kite-clean #kiteSettingsPop .manual-trail-bar button,html body.kite-clean .manual-trail-bar.kite-settings-open label,html body.kite-clean .manual-trail-bar.kite-settings-open select,html body.kite-clean .manual-trail-bar.kite-settings-open input,html body.kite-clean .manual-trail-bar.kite-settings-open button{background:var(--screen-alt,#edf1f6)!important;color:var(--ink,#243348)!important;border:1px solid var(--screen-edge,#c8d1de)!important;}'
+    + 'html body.kite-clean dialog.mtm-dialog{display:block!important;}'
+    + 'html body.kite-clean dialog.mtm-dialog:not([open]){display:none!important;}'
+    + 'html body.kite-clean .kiteLimit{display:inline-flex!important;align-items:center!important;gap:4px!important;min-width:0!important;margin:0!important;color:#1f2937!important;}'
+    + 'html body.kite-clean .kiteRow .kiteOrderType{display:inline-block!important;visibility:visible!important;opacity:1!important;height:26px!important;min-width:76px!important;max-width:none!important;padding:0 6px!important;font-size:12px!important;font-weight:650!important;line-height:24px!important;border:1px solid #c5ced8!important;border-radius:2px!important;background:#fff!important;color:#1f2937!important;-webkit-appearance:auto!important;appearance:auto!important;}'
+    + 'html body.kite-clean .kiteRow .kiteOrderType option{color:#1f2937!important;background:#fff!important;font-size:12px!important;}'
     + 'html body.kite-clean .kiteLimitPrice{box-sizing:border-box!important;width:72px!important;height:26px!important;padding:0 6px!important;font-size:12px!important;font-weight:650!important;border:1px solid #c5ced8!important;border-radius:2px!important;background:#fff!important;color:#1f2937!important;}'
     + 'html body.kite-clean .kiteLimitPrice.is-disabled,html body.kite-clean .kiteLimitPrice:disabled{opacity:.45!important;}'
     + 'html body.kite-clean .kiteLimitPrice[hidden]{display:none!important;}'
