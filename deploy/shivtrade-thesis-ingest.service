@@ -1,5 +1,5 @@
 [Unit]
-Description=THESIS KiteTicker full-mode ingest (FeedIngestor → thesis API)
+Description=THESIS KiteTicker full-mode ingest (dedicated WS object; FeedIngestor → thesis API)
 Documentation=file:///opt/shivtrade/research/shivatrade-backend/scripts/thesis_kite_ingest.py
 After=network-online.target shivtrade-thesis-api.service
 Wants=network-online.target

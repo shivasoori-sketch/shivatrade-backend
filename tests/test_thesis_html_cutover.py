@@ -29,6 +29,17 @@ def test_full_card_preview_thesis_only() -> None:
     assert "kd-card.js" not in html
 
 
+def test_no_kd_assessment_js_fallback() -> None:
+    for name in (
+        "index.html",
+        "KAALDRISHTI-FULL-CARD-PREVIEW.html",
+        "KAALDRISHTI-FLOAT-PREVIEW.html",
+    ):
+        html = (ROOT / name).read_text(encoding="utf-8")
+        assert "assessment.js" not in html
+        assert "/api/kaaldrishti/latest" not in html
+
+
 def test_external_signals_stub() -> None:
     from fastapi.testclient import TestClient
     from main import app
