@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THESIS · Widget</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:8px;background:#10151e;color:#edf2fa;font:13px system-ui}
+main{max-width:320px;margin:auto;background:#192231;border:1px solid #364459;border-radius:10px;padding:10px}
+#thesis-card-root{display:block;margin:8px 0 12px}
+.kd-legacy-bloated{display:none!important}
+.thesis-launch-notice{margin:0 0 8px;padding:8px 10px;border:1px solid #4a6b8a;border-radius:8px;background:#1a2838;font-size:11px;line-height:1.35;color:#c5d2e4}
+.thesis-launch-notice button{margin-top:6px;border:1px solid #62758f;background:transparent;color:inherit;border-radius:6px;padding:3px 8px;cursor:pointer;font:inherit}
+</style>
+<link rel="stylesheet" href="/kaaldrishti/thesis-card/thesis-card.css?v=2">
+<script type="module" src="/kaaldrishti/thesis-card/thesis-card.js?v=2"></script>
+</head>
+<body>
+<main>
+<div id="thesis-launch-banner" class="thesis-launch-notice" role="note" hidden>
+  <strong>THESIS is now in this slot.</strong> KD removed. Conviction changes only when your thesis changes — not when price twitches.
+  <button type="button" id="thesis-launch-dismiss">Got it</button>
+</div>
+<div id="thesis-card-root"></div>
+<nav aria-label="View" class="kd-legacy-bloated"></nav>
+<script>
+ if (!localStorage.getItem("thesis_launch_notice_dismissed")) {
+   const b = document.getElementById("thesis-launch-banner");
+   if (b) b.hidden = false;
+ }
+ document.getElementById("thesis-launch-dismiss")?.addEventListener("click", () => {
+   localStorage.setItem("thesis_launch_notice_dismissed", "1");
+   document.getElementById("thesis-launch-banner").hidden = true;
+ });
+ const theme = new URLSearchParams(location.search).get("theme") === "light" ? "light" : "dark";
+ document.documentElement.classList.toggle("light", theme === "light");
+</script>
+<script defer src="/kaaldrishti/assessment.js?v=7"></script>
+</main>
+</body>
+</html>

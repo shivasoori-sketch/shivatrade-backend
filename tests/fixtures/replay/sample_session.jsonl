@@ -1,0 +1,5 @@
+{"symbol": "NSE:TEST", "ts": 1000.0, "raw": {"ltp": 100.0, "open": 99.0, "high": 101.0, "low": 98.5, "close": 99.5, "vtt": 1000, "tbq": 5000, "tsq": 4000, "oi": 100000}}
+{"symbol": "NSE:TEST", "ts": 1001.0, "raw": {"ltp": 100.5, "open": 99.0, "high": 101.0, "low": 98.5, "close": 99.5, "vtt": 1100, "tbq": 5200, "tsq": 4100, "oi": 100010}}
+{"symbol": "NSE:TEST", "ts": 1002.0, "raw": {"ltp": 101.0, "open": 99.0, "high": 101.5, "low": 98.5, "close": 100.0, "vtt": 1200, "tbq": 5400, "tsq": 4200, "oi": 100020}}
+{"symbol": "NSE:TEST", "ts": 1010.0, "raw": {"ltp": 100.8, "open": 99.0, "high": 101.5, "low": 98.5, "close": 100.0, "vtt": 1150, "tbq": 5000, "tsq": 5000, "oi": 100015}}
+{"symbol": "NSE:TEST", "ts": 1400.0, "raw": {"ltp": 100.2, "open": 99.0, "high": 101.5, "low": 98.5, "close": 100.0, "vtt": 1050, "tbq": 4800, "tsq": 5200, "oi": 100000}}
