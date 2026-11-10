@@ -27,6 +27,8 @@ export default function ThesisCard({
   timeInTradeLabel = "—",
   adversePts = "—",
   idle = false,
+  previewHref,
+  previewBanner,
 }) {
   if (idle || !trade) {
     return (
@@ -39,6 +41,11 @@ export default function ThesisCard({
           Lock a thesis to track hold integrity. Conviction changes only when your thesis
           changes — not when price twitches.
         </p>
+        {previewHref ? (
+          <p className="thesis-idle-preview">
+            <a href={previewHref}>Preview live hold UI</a>
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -48,6 +55,11 @@ export default function ThesisCard({
 
   return (
     <div className={`thesis-card verdict-${verdict.toLowerCase()}`}>
+      {previewBanner ? (
+        <p className="thesis-preview-banner" role="note">
+          {previewBanner}
+        </p>
+      ) : null}
       <header className="thesis-head">
         <span className="thesis-title">THESIS</span>
         <span className={stateClass(verdict)} role="status">

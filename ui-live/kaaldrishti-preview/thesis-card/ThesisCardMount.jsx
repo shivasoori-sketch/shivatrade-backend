@@ -6,6 +6,11 @@ import {
   fetchTrade,
   openStateStream,
 } from "./thesisApi.js";
+import {
+  PREVIEW_SCENARIOS,
+  previewLiveHref,
+  previewModeFromPage,
+} from "./previewScenario.js";
 
 const STORAGE_KEY = "thesis_trade_id";
 
@@ -34,7 +39,11 @@ function adversePts(trade, ltp) {
 }
 
 export default function ThesisCardMount() {
-  const [tradeId, setTradeId] = useState(tradeIdFromPage);
+  const previewMode = previewModeFromPage();
+  const previewFixture = previewMode ? PREVIEW_SCENARIOS[previewMode] : null;
+  const [tradeId, setTradeId] = useState(() =>
+    previewFixture ? "" : tradeIdFromPage()
+  );
   const [trade, setTrade] = useState(null);
   const [state, setState] = useState(null);
   const [book, setBook] = useState(null);
@@ -136,6 +145,21 @@ export default function ThesisCardMount() {
     return () => clearInterval(id);
   }, [trade]);
 
+  if (previewFixture) {
+    return (
+      <ThesisCard
+        idle={false}
+        trade={previewFixture.trade}
+        state={previewFixture.state}
+        book={previewFixture.book}
+        lastUpdated={Date.now()}
+        timeInTradeLabel={previewFixture.timeInTradeLabel}
+        adversePts={previewFixture.adversePts}
+        previewBanner={`Scenario preview (${previewFixture.state.state}) — not a live trade.`}
+      />
+    );
+  }
+
   const idle = !tradeId;
 
   return (
@@ -147,6 +171,7 @@ export default function ThesisCardMount() {
       lastUpdated={badgeUpdated}
       timeInTradeLabel={timeInTradeLabel}
       adversePts={adverse}
+      previewHref={idle ? previewLiveHref() : undefined}
     />
   );
 }

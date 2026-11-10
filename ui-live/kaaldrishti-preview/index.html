@@ -28,8 +28,8 @@ html.light body{background:#f1f5f9;color:#172438}html.light :is(main,.panel,head
 </div>
 <div id="thesis-card-root"></div>
 
-<link rel="stylesheet" href="/kaaldrishti/thesis-card/thesis-card.css?v=2">
-<script type="module" src="/kaaldrishti/thesis-card/thesis-card.js?v=2"></script>
+<link rel="stylesheet" href="/kaaldrishti/thesis-card/thesis-card.css?v=3">
+<script type="module" src="/kaaldrishti/thesis-card/thesis-card.js?v=3"></script>
 <section class="kd-legacy-bloated" aria-label="Recorder assessment">
 <strong id="assessment-status" role="status">Connecting</strong>
 <p>Last capture <time id="assessment-capture">Unavailable</time></p>
@@ -124,7 +124,7 @@ html.light body{background:#f1f5f9;color:#172438}html.light :is(main,.panel,head
        });
        const thesisScript = doc.createElement("script");
        thesisScript.type = "module";
-       thesisScript.src = new URL("/kaaldrishti/thesis-card/thesis-card.js?v=2", floatUrl);
+       thesisScript.src = new URL("/kaaldrishti/thesis-card/thesis-card.js?v=3", floatUrl);
        doc.head.append(thesisScript);
        return;
      } catch {
