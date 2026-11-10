@@ -1,0 +1,35 @@
+name: THESIS CI
+
+on:
+  push:
+    branches:
+      - main
+      - "cursor/**"
+  pull_request:
+
+jobs:
+  unit-and-reconciliation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Pytest (unit + Phase 0 fixtures)
+        run: pytest tests/ -m "not integration" --tb=short -q
+      - name: Upload reconciliation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reconciliation-report
+          path: tests/reconciliation/reconciliation_report.json
+          if-no-files-found: ignore
+
+  kd-retire-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: KD /api/kaaldrishti/latest must be 404
+        run: bash scripts/check_kd_404.sh
