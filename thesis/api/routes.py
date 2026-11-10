@@ -165,6 +165,17 @@ def exit_trade(trade_id: str, body: ExitRequest) -> ExitResponse:
     )
 
 
+@router.get("/external_signals")
+def get_external_signals() -> dict:
+    """KD / legacy feeds — read-only, off by default (spec §7)."""
+    return {
+        "enabled": False,
+        "source": "kaaldrishti_legacy",
+        "note": "Does not write to THESIS conviction state.",
+        "signals": [],
+    }
+
+
 @router.get("/journal")
 def get_journal() -> dict:
     rt = get_runtime()
