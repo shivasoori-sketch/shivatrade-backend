@@ -88,5 +88,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
       - name: No preview=live in source
-        run: pytest tests/test_adviser_demo_contract.py::test_no_preview_live_string_in_source -q
+        run: PYTHONPATH=. pytest tests/test_adviser_demo_contract.py::test_no_preview_live_string_in_source -q
+
+  behavior-anti-chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Build THESIS card bundle for grep tests
+        run: |
+          cd ui-live/kaaldrishti-preview/thesis-card
+          npm ci
+          npm run build
+          cp dist/thesis-card.js dist/thesis-card.css .
+      - name: Anti-chart behavior (required for merge)
+        run: PYTHONPATH=. pytest tests/behavior/ -q
