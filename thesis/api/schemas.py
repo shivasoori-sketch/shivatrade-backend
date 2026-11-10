@@ -70,3 +70,19 @@ class ExitResponse(BaseModel):
     trade_id: str
     status: str
     state_at_exit: str | None
+
+
+class IngestTickRequest(BaseModel):
+    symbol: str
+    raw: dict
+    ts: float | None = None
+
+
+class IngestTickResponse(BaseModel):
+    ok: bool = True
+    data_stale: bool = False
+
+
+class IngestHealthResponse(BaseModel):
+    ok: bool = True
+    service: str = "thesis-api"

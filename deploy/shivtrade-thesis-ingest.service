@@ -1,0 +1,30 @@
+[Unit]
+Description=THESIS KiteTicker full-mode ingest (FeedIngestor → thesis API)
+Documentation=file:///opt/shivtrade/research/shivatrade-backend/scripts/thesis_kite_ingest.py
+After=network-online.target shivtrade-thesis-api.service
+Wants=network-online.target
+# Intentionally does not touch shivtrade-kaaldrishti-feed (kd_guard).
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/shivtrade/research/shivatrade-backend
+Environment=PYTHONPATH=/opt/shivtrade/research/shivatrade-backend
+Environment=SHIVTRADE_BROKERS_JSON=/opt/shivtrade/shared/config/brokers.json
+Environment=THESIS_API_URL=http://127.0.0.1:5098
+Environment=THESIS_FEED_ROOT=/opt/shivtrade/research/thesis-feed/sessions
+Environment=THESIS_KITE_ACCOUNT_ID=kite_main
+Environment=THESIS_INGEST_SYMBOLS=NSE:NIFTY26NOVFUT,NSE:SBIN,NSE:NIFTY 50
+Environment=THESIS_INSTRUMENT_MANIFEST=/opt/shivtrade/shared/ws_market_data/instruments.json
+ExecStart=/opt/shivtrade/.venv/bin/python /opt/shivtrade/research/shivatrade-backend/scripts/thesis_kite_ingest.py live
+Restart=on-failure
+RestartSec=15
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/opt/shivtrade/shared/config/brokers.json
+ReadOnlyPaths=/opt/shivtrade/shared/ws_market_data/instruments.json
+ReadWritePaths=/opt/shivtrade/research/thesis-feed
+
+[Install]
+WantedBy=multi-user.target
