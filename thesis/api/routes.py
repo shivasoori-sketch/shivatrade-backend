@@ -16,6 +16,7 @@ from thesis.api.schemas import (
     ExitRequest,
     ExitResponse,
     StateResponse,
+    TradeSummaryResponse,
 )
 from thesis.runtime import get_runtime
 from thesis.types import Direction, ThesisCondition, TradeThesis
@@ -60,6 +61,26 @@ def create_trade(body: CreateTradeRequest) -> CreateTradeResponse:
     return CreateTradeResponse(
         trade_id=rec.trade_id,
         book_score_baseline=baseline,
+    )
+
+
+@router.get("/trade/{trade_id}", response_model=TradeSummaryResponse)
+def get_trade(trade_id: str) -> TradeSummaryResponse:
+    rt = get_runtime()
+    rec = rt.registry.get(trade_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="trade not found")
+    t = rec.thesis
+    return TradeSummaryResponse(
+        trade_id=trade_id,
+        symbol=t.symbol,
+        direction=t.direction.value,
+        entry_price=t.entry_price,
+        stop_loss=t.stop_loss,
+        target=t.target,
+        status=rec.status,
+        book_score_baseline=rec.book_score_baseline,
+        created_at=rec.created_at,
     )
 
 

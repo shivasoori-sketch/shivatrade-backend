@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from kiteconnect import KiteConnect
 import os
 
@@ -24,6 +27,14 @@ if API_KEY and ACCESS_TOKEN:
 # =====================================================
 app = FastAPI(title="ShivaTrade Algo Backend")
 app.include_router(thesis_router)
+
+_UI_PREVIEW = Path(__file__).resolve().parent / "ui-live" / "kaaldrishti-preview"
+if _UI_PREVIEW.is_dir():
+    app.mount(
+        "/kaaldrishti",
+        StaticFiles(directory=str(_UI_PREVIEW), html=True),
+        name="kaaldrishti-preview",
+    )
 
 app.add_middleware(
     CORSMiddleware,

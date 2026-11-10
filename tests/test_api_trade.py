@@ -116,3 +116,23 @@ def test_ws_emits_only_on_state_change(client: TestClient) -> None:
 
     with client.websocket_connect(f"/trade/{trade_id}/stream"):
         pass
+
+
+def test_get_trade_summary(client: TestClient) -> None:
+    trade_id = client.post(
+        "/trade",
+        json={
+            "symbol": "NSE:TEST",
+            "direction": "long",
+            "entry_price": 100.0,
+            "stop_loss": 98.0,
+            "target": 105.0,
+            "conditions": [{"id": "a", "label": "test", "met": True}],
+        },
+    ).json()["trade_id"]
+    summary = client.get(f"/trade/{trade_id}")
+    assert summary.status_code == 200
+    body = summary.json()
+    assert body["trade_id"] == trade_id
+    assert body["entry_price"] == 100.0
+    assert body["status"] == "active"

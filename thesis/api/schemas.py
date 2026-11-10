@@ -29,6 +29,18 @@ class CreateTradeResponse(BaseModel):
     status: str = "locked"
 
 
+class TradeSummaryResponse(BaseModel):
+    trade_id: str
+    symbol: str
+    direction: str
+    entry_price: float
+    stop_loss: float
+    target: float
+    status: str
+    book_score_baseline: int
+    created_at: str
+
+
 class StateResponse(BaseModel):
     trade_id: str
     state: str
