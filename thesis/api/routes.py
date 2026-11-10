@@ -113,6 +113,10 @@ def get_trade_state(trade_id: str) -> StateResponse:
             for c in out.conditions
         ],
         data_stale=rt.store.is_data_stale(rec.thesis.symbol),
+        annotation=out.annotation,
+        intermediate_signal=(
+            out.intermediate_signal.value if out.intermediate_signal else None
+        ),
     )
 
 

@@ -16,6 +16,8 @@ class StateTransition:
     to_state: ThesisState
     reasons: tuple[str, ...]
     decision_line: str
+    annotation: str = ""
+    intermediate_signal: str | None = None
 
 
 @dataclass
@@ -34,19 +36,59 @@ class TradeRecord:
     exit_payload: dict | None = None
 
     def note_state_change(self, output: ThesisOutput, ts: float) -> bool:
-        prev = self.last_thesis.state if self.last_thesis else None
-        if prev == output.state:
-            return False
+        """Legacy: true when confirmed state changes."""
+        return "confirmed_state" in self.note_output(output, ts) or (
+            "immediate_invalidate" in self.note_output(output, ts)
+        )
+
+    def note_output(self, output: ThesisOutput, ts: float) -> list[str]:
+        if not output.confirmed:
+            return []
+        events: list[str] = []
+        prev = self.last_thesis
+        prev_state = prev.state if prev else None
+
+        if output.state == ThesisState.INVALIDATED and prev_state != ThesisState.INVALIDATED:
+            events.append("immediate_invalidate")
+            self._record_transition(output, ts, prev_state)
+        elif prev_state is not None and prev_state != output.state:
+            events.append("confirmed_state")
+            self._record_transition(output, ts, prev_state)
+        elif prev is None and output.state != ThesisState.INVALIDATED:
+            events.append("confirmed_state")
+            self._record_transition(output, ts, None)
+
+        ann_changed = prev is None or prev.annotation != output.annotation
+        sig_changed = prev is None or prev.intermediate_signal != output.intermediate_signal
+        if (ann_changed or sig_changed) and (
+            output.annotation or output.intermediate_signal
+        ):
+            if "intermediate_signal" not in events:
+                events.append("intermediate_signal")
+
+        return events
+
+    def _record_transition(
+        self,
+        output: ThesisOutput,
+        ts: float,
+        prev_state: ThesisState | None,
+    ) -> None:
         self.transitions.append(
             StateTransition(
                 timestamp=ts,
-                from_state=prev,
+                from_state=prev_state,
                 to_state=output.state,
                 reasons=output.reasons,
                 decision_line=output.decision_line,
+                annotation=output.annotation,
+                intermediate_signal=(
+                    output.intermediate_signal.value
+                    if output.intermediate_signal
+                    else None
+                ),
             )
         )
-        return True
 
 
 class TradeRegistry:
@@ -62,7 +104,11 @@ class TradeRegistry:
         book_score_baseline: int | None = None,
     ) -> TradeRecord:
         trade_id = str(uuid.uuid4())
-        baseline = book_score_baseline if book_score_baseline is not None else thesis.book_score_baseline
+        baseline = (
+            book_score_baseline
+            if book_score_baseline is not None
+            else thesis.book_score_baseline
+        )
         thesis.book_score_baseline = baseline
         rec = TradeRecord(
             trade_id=trade_id,

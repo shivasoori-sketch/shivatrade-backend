@@ -6,7 +6,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from thesis.ingestor import keys
+from thesis.ingestor import keys  # package __init__ is lightweight (no feed import)
 from thesis.ingestor.redis_store import RedisLike, ThesisRedisStore
 from thesis.types import Ohlc, TickInput
 

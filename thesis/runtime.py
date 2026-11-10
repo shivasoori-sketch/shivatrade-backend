@@ -21,7 +21,11 @@ class ThesisRuntime:
         self.ingestor = FeedIngestor(
             store=self.store,
             on_tick=self.pipeline.on_tick,
+            on_candle_closed=self._on_candle_closed,
         )
+
+    def _on_candle_closed(self, symbol: str, candle) -> None:
+        self.pipeline.on_candle_closed(symbol, candle)
 
     @classmethod
     def get(cls) -> ThesisRuntime:

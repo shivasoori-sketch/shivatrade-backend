@@ -45,7 +45,9 @@ class FeedIngestor:
             )
             if self.candle_builder is None:
                 self.candle_builder = builder
-            builder.on_tick(symbol, tick)
+            closed = builder.on_tick(symbol, tick)
+            if closed and self.on_candle_closed:
+                self.on_candle_closed(symbol, closed)
         if self.on_tick:
             self.on_tick(symbol, tick)
 

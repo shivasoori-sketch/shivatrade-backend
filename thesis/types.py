@@ -18,6 +18,12 @@ class Direction(str, Enum):
     SHORT = "short"
 
 
+class IntermediateSignal(str, Enum):
+    REAL_SELL_PRESSURE = "real_sell_pressure"
+    SWEEP_SUSPECTED = "sweep_suspected"
+    INSUFFICIENT_DATA = "insufficient_data"
+
+
 @dataclass(frozen=True)
 class DepthLevel:
     price: float
@@ -84,6 +90,8 @@ class BookOutput:
     sweep_risk: bool
     sub_scores: BookSubScores
     price_direction_up: bool
+    oi_rising: bool = False
+    volume_below_rolling: bool = False
 
 
 @dataclass(frozen=True)
@@ -117,3 +125,11 @@ class ThesisOutput:
     reasons: tuple[str, ...]
     decision_line: str
     conditions: tuple[ThesisCondition, ...]
+    """UI annotation (e.g. sweep detected, observing: …). Empty when none."""
+
+    annotation: str = ""
+    intermediate_signal: IntermediateSignal | None = None
+    """True when state/annotation may be shown; tick observations stay False."""
+
+    confirmed: bool = True
+    candle_minute_start: int | None = None

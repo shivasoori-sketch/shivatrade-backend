@@ -48,6 +48,8 @@ class StateResponse(BaseModel):
     decision_line: str
     conditions: list[ConditionIn]
     data_stale: bool = False
+    annotation: str = ""
+    intermediate_signal: str | None = None
 
 
 class BookResponse(BaseModel):

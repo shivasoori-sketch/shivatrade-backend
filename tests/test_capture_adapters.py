@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from thesis.ingestor import FeedIngestor, InMemoryRedisStore, ThesisRedisStore
+from thesis.ingestor.feed import FeedIngestor
+from thesis.ingestor.redis_store import InMemoryRedisStore, ThesisRedisStore
 from thesis.ingestor.adapters import adapt_upstox_tick, adapt_zerodha_tick
 from thesis.ingestor.capture import CaptureSession
 

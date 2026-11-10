@@ -57,6 +57,11 @@ export default function ThesisCard({
           {formatTime(lastUpdated)}
         </time>
       </header>
+      {state?.annotation ? (
+        <p className="thesis-annotation" role="note">
+          {state.annotation}
+        </p>
+      ) : null}
 
       <section className="thesis-book" aria-label="Book divergence">
         <div className="thesis-book-row">

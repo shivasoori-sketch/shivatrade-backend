@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from thesis.candle_builder import CandleBuilder, minute_start_epoch
-from thesis.ingestor import FeedIngestor, InMemoryRedisStore, ThesisRedisStore, keys
+from thesis.ingestor import keys
+from thesis.ingestor.feed import FeedIngestor
+from thesis.ingestor.redis_store import InMemoryRedisStore, ThesisRedisStore
 from thesis.types import Ohlc, TickInput
 
 

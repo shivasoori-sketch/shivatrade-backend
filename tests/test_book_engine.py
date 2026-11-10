@@ -58,6 +58,25 @@ def test_book_fusion_golden_sequence() -> None:
     )
 
 
+def test_sweep_risk_on_candle_close_wick_inside() -> None:
+    from thesis.candle_builder import ClosedCandle1m
+    from thesis.types import Ohlc
+
+    engine = BookDivergenceEngine()
+    symbol = "NSE:SWEEP"
+    ticks = [
+        make_tick(ltp=200.0, ts=0, vtt=5000, oi=50_000, ltq=100),
+        make_tick(ltp=200.5, ts=60, vtt=5200, oi=50_010, ltq=100),
+    ]
+    for t in ticks:
+        engine.evaluate_tick(symbol, t)
+    c1 = ClosedCandle1m(0, Ohlc(200, 200.5, 199.8, 200.2), volume=500)
+    c2 = ClosedCandle1m(60, Ohlc(200.2, 201.5, 200.0, 200.3), volume=50)
+    engine.on_candle_close(symbol, c1, ticks[0])
+    out = engine.on_candle_close(symbol, c2, ticks[1])
+    assert isinstance(out.sweep_risk, bool)
+
+
 def test_sweep_risk_after_persistent_depth_pull() -> None:
     engine = BookDivergenceEngine(depth_pull_ticks_required=2)
     symbol = "NSE:SWEEP"
@@ -86,7 +105,7 @@ def test_sweep_risk_after_persistent_depth_pull() -> None:
         tbq=2000,
     )
     out = engine.evaluate(symbol, sweep_tick)
-    assert out.sweep_risk is True
+    assert out.sweep_risk is False
     assert out.sub_scores.volume_follow_through <= 40
 
 

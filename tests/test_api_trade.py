@@ -27,7 +27,7 @@ def client() -> TestClient:
 def _seed_ticks(symbol: str = "NSE:TEST") -> None:
     rt = ThesisRuntime.get()
     path = Path(__file__).parent / "fixtures" / "replay" / "sample_session.jsonl"
-    from thesis.ingestor import MockBrokerAdapter
+    from thesis.ingestor.feed import MockBrokerAdapter
 
     ticks = []
     for line in path.read_text().splitlines():
