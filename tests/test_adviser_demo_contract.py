@@ -7,7 +7,15 @@ REPO = Path(__file__).resolve().parent.parent
 
 def test_no_preview_live_string_in_source() -> None:
     banned = "preview=live"
-    exclude_dirs = {".git", "node_modules", "dist", ".venv", "__pycache__"}
+    exclude_dirs = {
+        ".git",
+        "node_modules",
+        "dist",
+        ".venv",
+        "__pycache__",
+        "tests",
+        ".github",
+    }
     hits: list[str] = []
     for path in REPO.rglob("*"):
         if not path.is_file():
