@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
+
+
+def _ts_value(value: object) -> object:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
 
 ZERODHA_FULL_TICK_FIELDS = (
     "ltp",
@@ -33,9 +40,11 @@ def adapt_zerodha_tick(tick: dict[str, Any], *, symbol: str) -> dict[str, Any]:
         "oi": tick.get("oi") or tick.get("open_interest"),
         "tbq": tick.get("total_buy_quantity") or tick.get("tbq"),
         "tsq": tick.get("total_sell_quantity") or tick.get("tsq"),
-        "timestamp": tick.get("exchange_timestamp")
-        or tick.get("timestamp")
-        or tick.get("last_trade_time"),
+        "timestamp": _ts_value(
+            tick.get("exchange_timestamp")
+            or tick.get("timestamp")
+            or tick.get("last_trade_time")
+        ),
         "open": ohlc.get("open"),
         "high": ohlc.get("high"),
         "low": ohlc.get("low"),

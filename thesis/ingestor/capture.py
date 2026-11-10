@@ -59,7 +59,7 @@ class CaptureSession:
             "ts": ts,
             "raw": raw,
         }
-        self._fh.write(json.dumps(row, separators=(",", ":")) + "\n")
+        self._fh.write(json.dumps(row, separators=(",", ":"), default=str) + "\n")
         self._fh.flush()
         self.line_count += 1
 

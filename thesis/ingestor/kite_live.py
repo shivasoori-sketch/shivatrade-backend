@@ -87,11 +87,19 @@ class ThesisKiteLiveIngest:
                 epoch = ts.timestamp()
             elif isinstance(ts, (int, float)):
                 epoch = float(ts)
-            self._ingestor.on_raw_tick(symbol, adapted, timestamp=epoch)
+            elif isinstance(ts, str):
+                from thesis.ingestor.normalize import _parse_timestamp
+
+                epoch = _parse_timestamp(ts)
+            tick_input = self._ingestor.on_raw_tick(symbol, adapted, timestamp=epoch)
             if epoch is not None:
                 self._metrics.note_tick(symbol, epoch)
+            elif tick_input.timestamp > 0:
+                self._metrics.note_tick(symbol, tick_input.timestamp)
             if self.forwarder:
-                self.forwarder.forward_tick(symbol, adapted, timestamp=epoch)
+                self.forwarder.forward_tick(
+                    symbol, adapted, timestamp=epoch or tick_input.timestamp
+                )
 
     def _on_connect(self, _ws: Any, _response: Any) -> None:
         tokens = list(self.token_to_symbol.keys())
