@@ -27,9 +27,66 @@ jobs:
           path: tests/reconciliation/reconciliation_report.json
           if-no-files-found: ignore
 
+  reconciliation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pytest tests/reconciliation/ -q
+
+  engines:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pytest tests/test_thesis_engine.py tests/test_book_engine.py tests/test_pipeline_v2.py -q
+
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pytest tests/golden/ -q
+
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pytest tests/benchmark/ -q
+
+  wick-replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pytest tests/wick_replay/ -q
+
   kd-retire-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: KD /api/kaaldrishti/latest must be 404
         run: bash scripts/check_kd_404.sh
+
+  no-preview-live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No preview=live in source
+        run: pytest tests/test_adviser_demo_contract.py::test_no_preview_live_string_in_source -q

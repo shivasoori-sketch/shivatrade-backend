@@ -7,15 +7,19 @@ import {
   openStateStream,
 } from "./thesisApi.js";
 import {
-  PREVIEW_SCENARIOS,
-  previewLiveHref,
-  previewModeFromPage,
-} from "./previewScenario.js";
+  applyDemoNoIndex,
+  DEMO_BANNER,
+  DEMO_SCENARIOS,
+  demoHoldsHref,
+  demoModeFromPage,
+} from "./demoScenario.js";
+import { bookLineEnabledForLive } from "./thesisUiConfig.js";
 
 const STORAGE_KEY = "thesis_trade_id";
 
 function tradeIdFromPage() {
   const params = new URLSearchParams(window.location.search);
+  if (params.has("demo")) return "";
   return params.get("trade_id") || sessionStorage.getItem(STORAGE_KEY) || "";
 }
 
@@ -39,10 +43,10 @@ function adversePts(trade, ltp) {
 }
 
 export default function ThesisCardMount() {
-  const previewMode = previewModeFromPage();
-  const previewFixture = previewMode ? PREVIEW_SCENARIOS[previewMode] : null;
+  const demoMode = demoModeFromPage();
+  const demoFixture = demoMode ? DEMO_SCENARIOS[demoMode] : null;
   const [tradeId, setTradeId] = useState(() =>
-    previewFixture ? "" : tradeIdFromPage()
+    demoFixture ? "" : tradeIdFromPage()
   );
   const [trade, setTrade] = useState(null);
   const [state, setState] = useState(null);
@@ -52,15 +56,24 @@ export default function ThesisCardMount() {
   const [adverse, setAdverse] = useState("—");
   const displayedVerdict = useRef(null);
   const lastLtp = useRef(null);
+  const showLiveBookLine = bookLineEnabledForLive();
 
-  const refreshBookOnCandleClose = useCallback(async (id) => {
-    try {
-      const b = await fetchBook(id);
-      setBook(b);
-    } catch {
-      /* book may be absent until first candle-close event */
-    }
-  }, []);
+  useEffect(() => {
+    applyDemoNoIndex();
+  }, [demoMode]);
+
+  const refreshBookOnCandleClose = useCallback(
+    async (id) => {
+      if (!showLiveBookLine) return;
+      try {
+        const b = await fetchBook(id);
+        setBook(b);
+      } catch {
+        /* awaiting first candle close */
+      }
+    },
+    [showLiveBookLine]
+  );
 
   const applyConfirmedState = useCallback(
     async (payload) => {
@@ -145,17 +158,19 @@ export default function ThesisCardMount() {
     return () => clearInterval(id);
   }, [trade]);
 
-  if (previewFixture) {
+  if (demoFixture) {
     return (
       <ThesisCard
         idle={false}
-        trade={previewFixture.trade}
-        state={previewFixture.state}
-        book={previewFixture.book}
+        isDemo
+        trade={demoFixture.trade}
+        state={demoFixture.state}
+        book={demoFixture.book}
+        showBookLine
         lastUpdated={Date.now()}
-        timeInTradeLabel={previewFixture.timeInTradeLabel}
-        adversePts={previewFixture.adversePts}
-        previewBanner={`Scenario preview (${previewFixture.state.state}) — not a live trade.`}
+        timeInTradeLabel={demoFixture.timeInTradeLabel}
+        adversePts={demoFixture.adversePts}
+        demoBanner={DEMO_BANNER}
       />
     );
   }
@@ -168,10 +183,11 @@ export default function ThesisCardMount() {
       trade={trade}
       state={state}
       book={book}
+      showBookLine={showLiveBookLine}
       lastUpdated={badgeUpdated}
       timeInTradeLabel={timeInTradeLabel}
       adversePts={adverse}
-      previewHref={idle ? previewLiveHref() : undefined}
+      demoHref={idle ? demoHoldsHref() : undefined}
     />
   );
 }

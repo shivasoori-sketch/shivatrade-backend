@@ -12,6 +12,8 @@ function stateClass(state) {
   return "thesis-badge idle";
 }
 
+import { BOOK_PENDING_COPY } from "./thesisUiConfig.js";
+
 function bookAlignment(book) {
   if (!book) return "—";
   if (book.divergence_flag) return "diverging";
@@ -27,8 +29,10 @@ export default function ThesisCard({
   timeInTradeLabel = "—",
   adversePts = "—",
   idle = false,
-  previewHref,
-  previewBanner,
+  isDemo = false,
+  showBookLine = true,
+  demoHref,
+  demoBanner,
 }) {
   if (idle || !trade) {
     return (
@@ -41,9 +45,9 @@ export default function ThesisCard({
           Lock a thesis to track hold integrity. Conviction changes only when your thesis
           changes — not when price twitches.
         </p>
-        {previewHref ? (
+        {demoHref ? (
           <p className="thesis-idle-preview">
-            <a href={previewHref}>Preview live hold UI</a>
+            <a href={demoHref}>View demo (HOLDS)</a>
           </p>
         ) : null}
       </div>
@@ -55,9 +59,9 @@ export default function ThesisCard({
 
   return (
     <div className={`thesis-card verdict-${verdict.toLowerCase()}`}>
-      {previewBanner ? (
-        <p className="thesis-preview-banner" role="note">
-          {previewBanner}
+      {demoBanner ? (
+        <p className="thesis-demo-banner" role="note">
+          {demoBanner}
         </p>
       ) : null}
       <header className="thesis-head">
@@ -75,23 +79,29 @@ export default function ThesisCard({
         </p>
       ) : null}
 
-      <section className="thesis-book" aria-label="Book divergence">
-        <div className="thesis-book-row">
-          <span>
-            BOOK: {book ? book.book_score : "—"} / 100
-          </span>
-          <span className="thesis-book-align">{bookAlignment(book)}</span>
-        </div>
-        <div
-          className="thesis-bar"
-          role="meter"
-          aria-valuenow={barPct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <span className="thesis-bar-fill" style={{ width: `${barPct}%` }} />
-        </div>
-      </section>
+      {showBookLine ? (
+        <section className="thesis-book" aria-label="Book divergence">
+          <div className="thesis-book-row">
+            <span>
+              BOOK: {book ? book.book_score : "—"} / 100
+            </span>
+            <span className="thesis-book-align">{bookAlignment(book)}</span>
+          </div>
+          <div
+            className="thesis-bar"
+            role="meter"
+            aria-valuenow={barPct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <span className="thesis-bar-fill" style={{ width: `${barPct}%` }} />
+          </div>
+        </section>
+      ) : !isDemo ? (
+        <p className="thesis-book-pending" role="note">
+          {BOOK_PENDING_COPY}
+        </p>
+      ) : null}
 
       <section className="thesis-checklist">
         <h2 className="thesis-section-label">Thesis checklist</h2>

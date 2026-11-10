@@ -1,4 +1,7 @@
-/** Static fixtures for ?preview= on the public kaaldrishti slot (no API / trade lock). */
+/** Static fixtures for ?demo= on the public kaaldrishti slot (no API / trade lock). */
+
+export const DEMO_BANNER =
+  "DEMO — static fixtures, not live market data. Not a validation claim.";
 
 const createdAt = () =>
   new Date(Date.now() - 47 * 60 * 1000 - 22 * 1000).toISOString();
@@ -12,8 +15,8 @@ const baseTrade = () => ({
   created_at: createdAt(),
 });
 
-export const PREVIEW_SCENARIOS = {
-  live: {
+export const DEMO_SCENARIOS = {
+  holds: {
     trade: baseTrade(),
     state: {
       state: "HOLDS",
@@ -66,21 +69,55 @@ export const PREVIEW_SCENARIOS = {
   },
 };
 
-export function previewModeFromPage() {
-  const raw = new URLSearchParams(window.location.search).get("preview");
-  if (!raw) return "";
-  const key = raw.toLowerCase();
-  if (key === "holds") return "live";
-  return PREVIEW_SCENARIOS[key] ? key : "";
+const LEGACY_PREVIEW_MAP = {
+  live: "holds",
+  holds: "holds",
+  weakening: "weakening",
+  invalidated: "invalidated",
+};
+
+/** Redirect deprecated ?preview=… to ?demo=… (one-shot). */
+export function ensureDemoQueryFromLegacy() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has("preview")) return false;
+  const mapped = LEGACY_PREVIEW_MAP[params.get("preview").toLowerCase()];
+  params.delete("preview");
+  params.delete("trade_id");
+  if (mapped) params.set("demo", mapped);
+  const q = params.toString();
+  const next = q
+    ? `${window.location.pathname}?${q}${window.location.hash || ""}`
+    : `${window.location.pathname}${window.location.hash || ""}`;
+  window.location.replace(next);
+  return true;
 }
 
-export function previewHref(mode = "live") {
+export function demoModeFromPage() {
+  const raw = new URLSearchParams(window.location.search).get("demo");
+  if (!raw) return "";
+  const key = raw.toLowerCase();
+  return DEMO_SCENARIOS[key] ? key : "";
+}
+
+export function demoHref(mode = "holds") {
   const params = new URLSearchParams(window.location.search);
-  params.set("preview", mode);
+  params.set("demo", mode);
   params.delete("trade_id");
+  params.delete("preview");
   return `?${params.toString()}`;
 }
 
-export function previewLiveHref() {
-  return previewHref("live");
+export function demoHoldsHref() {
+  return demoHref("holds");
+}
+
+export function applyDemoNoIndex() {
+  if (!demoModeFromPage()) return;
+  let el = document.querySelector('meta[name="robots"]');
+  if (!el) {
+    el = document.createElement("meta");
+    el.setAttribute("name", "robots");
+    document.head.appendChild(el);
+  }
+  el.setAttribute("content", "noindex, nofollow");
 }

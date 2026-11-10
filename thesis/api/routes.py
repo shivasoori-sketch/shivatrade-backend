@@ -152,7 +152,10 @@ def get_trade_book(trade_id: str) -> BookResponse:
     if not rec:
         raise HTTPException(status_code=404, detail="trade not found")
     if not rec.last_book:
-        raise HTTPException(status_code=409, detail="no book data yet")
+        raise HTTPException(
+            status_code=409,
+            detail="Awaiting candle close — book score updates on 1m close.",
+        )
     b = rec.last_book
     return BookResponse(
         trade_id=trade_id,
