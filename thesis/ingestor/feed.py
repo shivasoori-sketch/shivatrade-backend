@@ -6,6 +6,8 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
+from thesis.candle_builder import CandleBuilder, ClosedCandle1m
+from thesis.ingestor.capture import CaptureSession
 from thesis.ingestor.normalize import normalize_broker_tick
 from thesis.ingestor.redis_store import ThesisRedisStore
 from thesis.types import TickInput
@@ -19,9 +21,13 @@ class FeedIngestor:
     store: ThesisRedisStore
     gap_threshold_seconds: float = 5.0
     on_tick: TickHandler | None = None
+    candle_builder: CandleBuilder | None = None
+    capture_session: CaptureSession | None = None
+    build_candles: bool = True
     _last_ts: dict[str, float] = field(default_factory=dict)
     _reconnect_attempts: int = 0
     _connected: bool = True
+    on_candle_closed: Callable[[str, ClosedCandle1m], None] | None = None
 
     def ingest_tick(self, symbol: str, tick: TickInput) -> None:
         last = self._last_ts.get(symbol)
@@ -33,12 +39,21 @@ class FeedIngestor:
 
         self.store.write_tick(symbol, tick)
         self._last_ts[symbol] = tick.timestamp
+        if self.build_candles:
+            builder = self.candle_builder or CandleBuilder(
+                self.store, on_candle_closed=self.on_candle_closed
+            )
+            if self.candle_builder is None:
+                self.candle_builder = builder
+            builder.on_tick(symbol, tick)
         if self.on_tick:
             self.on_tick(symbol, tick)
 
     def on_raw_tick(
         self, symbol: str, raw: dict, *, timestamp: float | None = None
     ) -> TickInput:
+        if self.capture_session is not None:
+            self.capture_session.record(symbol, raw, timestamp=timestamp)
         tick = normalize_broker_tick(raw, symbol=symbol, timestamp=timestamp)
         if tick.timestamp <= 0:
             tick = replace(tick, timestamp=time.time())

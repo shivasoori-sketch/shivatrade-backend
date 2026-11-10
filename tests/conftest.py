@@ -39,6 +39,7 @@ def make_tick(
     return TickInput(
         ltp=ltp,
         ohlc=o,
+        ltq=0,
         vtt=vtt,
         tbq=tbq,
         tsq=tsq,

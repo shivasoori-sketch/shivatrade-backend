@@ -38,6 +38,9 @@ class TickInput:
 
     ltp: float
     ohlc: Ohlc
+    """Last traded quantity on this tick (Zerodha ltq / Upstox ltpc)."""
+
+    ltq: int
     vtt: int
     tbq: int
     tsq: int

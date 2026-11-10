@@ -38,9 +38,20 @@ def normalize_broker_tick(raw: dict, *, symbol: str, timestamp: float | None = N
     bid = depth.get("buy") or depth.get("bid") or raw.get("depth_bid") or []
     ask = depth.get("sell") or depth.get("ask") or raw.get("depth_ask") or []
 
+    ltpc = raw.get("ltpc") or {}
+    ltq = int(
+        raw.get("ltq")
+        or raw.get("last_traded_quantity")
+        or ltpc.get("ltq")
+        or ltpc.get("ltt")
+        or raw.get("last_quantity")
+        or 0
+    )
+
     return TickInput(
         ltp=ltp,
         ohlc=Ohlc(open=o, high=h, low=lo, close=c),
+        ltq=ltq,
         vtt=int(raw.get("volume_traded") or raw.get("vtt") or raw.get("volume") or 0),
         tbq=int(raw.get("total_buy_quantity") or raw.get("tbq") or 0),
         tsq=int(raw.get("total_sell_quantity") or raw.get("tsq") or 0),
