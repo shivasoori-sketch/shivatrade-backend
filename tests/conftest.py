@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
+import pytest
+
+from thesis.runtime import ThesisRuntime
 from thesis.types import DepthLevel, Ohlc, TickInput
+
+
+@pytest.fixture(autouse=True)
+def _isolated_thesis_runtime() -> None:
+    """Reset shared runtime unless a module opts out with its own fixture."""
+    yield
 
 
 def make_tick(

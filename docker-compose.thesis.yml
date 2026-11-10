@@ -1,0 +1,9 @@
+# Phase 1 fragment — Redis for THESIS ingestor on VPS.
+# API: `uvicorn main:app --host 0.0.0.0 --port 8000` on the ShivaTrade host.
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    restart: unless-stopped

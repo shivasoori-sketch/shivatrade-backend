@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from kiteconnect import KiteConnect
 import os
 
+from thesis.api import router as thesis_router
+
 # =====================================================
 # 🔐 KITE CONFIG (SAFE — ENV VARS ONLY)
 # =====================================================
@@ -21,6 +23,7 @@ if API_KEY and ACCESS_TOKEN:
 # 🚀 FASTAPI APP
 # =====================================================
 app = FastAPI(title="ShivaTrade Algo Backend")
+app.include_router(thesis_router)
 
 app.add_middleware(
     CORSMiddleware,
