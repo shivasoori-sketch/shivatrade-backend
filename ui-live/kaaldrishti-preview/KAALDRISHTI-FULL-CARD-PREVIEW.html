@@ -17,6 +17,11 @@ html.light body{background:#f1f5f9;color:#172438}html.light :is(main,.panel,head
 .kd-page-chrome{display:none!important}
 .thesis-launch-notice{margin:0 0 10px;padding:10px 12px;border:1px solid #4a6b8a;border-radius:8px;background:#1a2838;font-size:12px;line-height:1.4;color:#c5d2e4}
 .thesis-launch-notice button{margin-top:8px;border:1px solid #62758f;background:transparent;color:inherit;border-radius:6px;padding:4px 10px;cursor:pointer;font:inherit}
+html.light .thesis-page-header h1{color:#172438}
+html.light .thesis-page-header p{color:#46566c}
+html.light .thesis-launch-notice{background:#fff;border-color:#c7d4e4;color:#46566c}
+html.light .display-settings,html.light .display-settings strong{color:#172438}
+html.light #float-status{color:#46566c}
 
 </style>
 <main>
@@ -28,8 +33,8 @@ html.light body{background:#f1f5f9;color:#172438}html.light :is(main,.panel,head
 </div>
 <div id="thesis-card-root"></div>
 
-<link rel="stylesheet" href="/kaaldrishti/thesis-card/thesis-card.css?v=3">
-<script type="module" src="/kaaldrishti/thesis-card/thesis-card.js?v=3"></script>
+<link rel="stylesheet" href="/kaaldrishti/thesis-card/thesis-card.css?v=4">
+<script type="module" src="/kaaldrishti/thesis-card/thesis-card.js?v=4"></script>
 <section class="kd-legacy-bloated" aria-label="Recorder assessment">
 <strong id="assessment-status" role="status">Connecting</strong>
 <p>Last capture <time id="assessment-capture">Unavailable</time></p>
@@ -124,7 +129,7 @@ html.light body{background:#f1f5f9;color:#172438}html.light :is(main,.panel,head
        });
        const thesisScript = doc.createElement("script");
        thesisScript.type = "module";
-       thesisScript.src = new URL("/kaaldrishti/thesis-card/thesis-card.js?v=3", floatUrl);
+       thesisScript.src = new URL("/kaaldrishti/thesis-card/thesis-card.js?v=4", floatUrl);
        doc.head.append(thesisScript);
        return;
      } catch {
