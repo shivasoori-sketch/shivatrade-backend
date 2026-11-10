@@ -66,6 +66,9 @@ class ThesisKiteLiveIngest:
         self._stop = threading.Event()
         self._ticker = None
         self._bind_reason = bind_reason
+        self._forward_pool = threading.Thread(
+            target=self._forward_worker, name="thesis-ingest-forward", daemon=True
+        )
         store = ThesisRedisStore(InMemoryRedisStore())
         self._session = CaptureSession(capture_path, broker="zerodha").open()
         self._ingestor = FeedIngestor(
@@ -73,6 +76,29 @@ class ThesisKiteLiveIngest:
             build_candles=True,
             capture_session=self._session,
         )
+        self._forward_queue: list[tuple[str, dict, float | None]] = []
+        self._forward_lock = threading.Lock()
+        self._forward_pool.start()
+
+    def _forward_worker(self) -> None:
+        while not self._stop.is_set():
+            batch: list[tuple[str, dict, float | None]] = []
+            with self._forward_lock:
+                if self._forward_queue:
+                    batch = self._forward_queue[:]
+                    self._forward_queue.clear()
+            for symbol, adapted, epoch in batch:
+                if self.forwarder:
+                    self.forwarder.forward_tick(symbol, adapted, timestamp=epoch)
+            time.sleep(0.01)
+
+    def _enqueue_forward(
+        self, symbol: str, adapted: dict, epoch: float | None
+    ) -> None:
+        if not self.forwarder:
+            return
+        with self._forward_lock:
+            self._forward_queue.append((symbol, adapted, epoch))
 
     def _on_tick_batch(self, _ws: Any, ticks: list[dict]) -> None:
         for raw in ticks:
@@ -91,15 +117,11 @@ class ThesisKiteLiveIngest:
                 from thesis.ingestor.normalize import _parse_timestamp
 
                 epoch = _parse_timestamp(ts)
+            if not epoch or epoch <= 0:
+                epoch = time.time()
             tick_input = self._ingestor.on_raw_tick(symbol, adapted, timestamp=epoch)
-            if epoch is not None:
-                self._metrics.note_tick(symbol, epoch)
-            elif tick_input.timestamp > 0:
-                self._metrics.note_tick(symbol, tick_input.timestamp)
-            if self.forwarder:
-                self.forwarder.forward_tick(
-                    symbol, adapted, timestamp=epoch or tick_input.timestamp
-                )
+            self._metrics.note_tick(symbol, tick_input.timestamp)
+            self._enqueue_forward(symbol, adapted, tick_input.timestamp)
 
     def _on_connect(self, _ws: Any, _response: Any) -> None:
         tokens = list(self.token_to_symbol.keys())
