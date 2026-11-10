@@ -1,13 +1,9 @@
-"""Feed ingestor: broker ticks → normalized TickInput → Redis layout."""
+"""Feed ingestor package (avoid circular imports — import submodules directly)."""
 
-from thesis.ingestor.feed import FeedIngestor, MockBrokerAdapter
-from thesis.ingestor.normalize import normalize_broker_tick
-from thesis.ingestor.redis_store import InMemoryRedisStore, ThesisRedisStore
+from thesis.ingestor.capture import CaptureSession, attach_capture, replay_capture
 
 __all__ = [
-    "FeedIngestor",
-    "InMemoryRedisStore",
-    "MockBrokerAdapter",
-    "ThesisRedisStore",
-    "normalize_broker_tick",
+    "CaptureSession",
+    "attach_capture",
+    "replay_capture",
 ]

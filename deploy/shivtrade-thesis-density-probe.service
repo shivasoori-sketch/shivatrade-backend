@@ -1,0 +1,20 @@
+[Unit]
+Description=THESIS Gate 1 independent KiteTicker density probe
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/shivtrade/research/shivatrade-backend
+Environment=PYTHONPATH=/opt/shivtrade/research/shivatrade-backend
+Environment=SHIVTRADE_BROKERS_JSON=/opt/shivtrade/config/brokers.json
+Environment=THESIS_KITE_ACCOUNT_ID=kite_main
+Environment=THESIS_PROBE_SYMBOLS=NSE:NIFTY26NOVFUT,NSE:SBIN
+Environment=THESIS_PROBE_DURATION_SEC=600
+ExecStart=/opt/shivtrade/.venv/bin/python scripts/thesis_kite_density_probe.py --duration 600 --json
+Restart=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

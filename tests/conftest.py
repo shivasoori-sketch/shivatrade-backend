@@ -18,6 +18,7 @@ def make_tick(
     *,
     ltp: float,
     ts: float,
+    ltq: int = 1,
     vtt: int = 1000,
     tbq: int = 5000,
     tsq: int = 4000,
@@ -39,6 +40,7 @@ def make_tick(
     return TickInput(
         ltp=ltp,
         ohlc=o,
+        ltq=ltq,
         vtt=vtt,
         tbq=tbq,
         tsq=tsq,

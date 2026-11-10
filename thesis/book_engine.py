@@ -1,9 +1,10 @@
-"""Book-Divergence Engine — deterministic tick fusion (0–100 book score)."""
+"""Book-Divergence Engine — tick fusion + v2 sweep_risk on candle close."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
+from thesis.candle_builder import ClosedCandle1m
 from thesis.types import (
     BookOutput,
     BookSubScores,
@@ -30,8 +31,6 @@ def _spread(tick: TickInput) -> float:
 
 @dataclass
 class SymbolBookState:
-    """Per-symbol rolling state for fusion and sweep persistence."""
-
     prev_ltp: float | None = None
     prev_oi: int | None = None
     prev_vtt: int | None = None
@@ -42,6 +41,7 @@ class SymbolBookState:
     ltp_window: list[float] = field(default_factory=list)
     vtt_window: list[int] = field(default_factory=list)
     oi_window: list[int] = field(default_factory=list)
+    closed_candles: list[ClosedCandle1m] = field(default_factory=list)
 
     def observe(self, tick: TickInput, *, window: int = 20) -> None:
         self.ltp_window.append(tick.ltp)
@@ -86,14 +86,16 @@ class BookDivergenceEngine:
         return self._symbols[symbol]
 
     def evaluate(self, symbol: str, tick: TickInput) -> BookOutput:
+        """Per-tick fusion; sweep_risk is finalized on candle close."""
+        return self.evaluate_tick(symbol, tick)
+
+    def evaluate_tick(self, symbol: str, tick: TickInput) -> BookOutput:
         state = self._state(symbol)
         state.observe(tick)
 
         price_up = (
             state.prev_ltp is not None and tick.ltp > state.prev_ltp
-        ) or (
-            state.prev_ltp is None and tick.ltp >= tick.ohlc.close
-        )
+        ) or (state.prev_ltp is None and tick.ltp >= tick.ohlc.close)
 
         absorption = self._absorption(tick, price_up)
         liquidity = self._liquidity_vacuum(tick, state)
@@ -130,16 +132,10 @@ class BookDivergenceEngine:
         else:
             state.depth_pull_ticks = 0
 
+        oi_rising = state.prev_oi is not None and tick.oi > state.prev_oi
         oi_flat = (
             state.prev_oi is not None
-            and abs(tick.oi - state.prev_oi) <= max(1, state.prev_oi // 100)
-        )
-        breakout = self._breakout_detected(tick, state, price_up)
-        sweep = (
-            breakout
-            and volume_ft <= 40
-            and oi_flat
-            and state.depth_pull_ticks >= self.depth_pull_ticks_required
+            and tick.oi <= state.prev_oi + max(1, state.prev_oi // 100)
         )
 
         state.prev_ltp = tick.ltp
@@ -150,7 +146,7 @@ class BookDivergenceEngine:
         return BookOutput(
             book_score=book_score,
             divergence_flag=divergence,
-            sweep_risk=sweep,
+            sweep_risk=False,
             sub_scores=BookSubScores(
                 absorption=absorption,
                 liquidity_vacuum=liquidity,
@@ -158,7 +154,60 @@ class BookDivergenceEngine:
                 volume_follow_through=volume_ft,
             ),
             price_direction_up=price_up,
+            oi_rising=oi_rising,
+            volume_below_rolling=volume_ft <= 40,
         )
+
+    def on_candle_close(
+        self, symbol: str, candle: ClosedCandle1m, tick: TickInput
+    ) -> BookOutput:
+        """Re-evaluate tick fusion and apply v2 sweep_risk at candle boundary."""
+        state = self._state(symbol)
+        state.closed_candles.append(candle)
+        if len(state.closed_candles) > 8:
+            state.closed_candles.pop(0)
+
+        base = self.evaluate_tick(symbol, tick)
+        sweep = self._sweep_risk_at_close(state, candle, tick)
+        vol_dry = self._volume_dry_at_close(state, candle)
+        return replace(
+            base,
+            sweep_risk=sweep,
+            volume_below_rolling=vol_dry,
+        )
+
+    def _sweep_risk_at_close(
+        self,
+        state: SymbolBookState,
+        candle: ClosedCandle1m,
+        tick: TickInput,
+    ) -> bool:
+        if len(state.closed_candles) < 2:
+            return False
+        prior = state.closed_candles[:-1]
+        key_high = max(c.ohlc.high for c in prior)
+        key_low = min(c.ohlc.low for c in prior)
+        wick_up = candle.ohlc.high > key_high and candle.ohlc.close < key_high
+        wick_down = candle.ohlc.low < key_low and candle.ohlc.close > key_low
+        wick_break = wick_up or wick_down
+        if not wick_break:
+            return False
+        vol_dry = self._volume_dry_at_close(state, candle)
+        oi_flat = state.prev_oi is not None and tick.oi <= state.prev_oi + max(
+            1, (state.prev_oi or 0) // 100
+        )
+        return vol_dry and oi_flat
+
+    def _volume_dry_at_close(
+        self, state: SymbolBookState, candle: ClosedCandle1m
+    ) -> bool:
+        if len(state.closed_candles) < 2:
+            return False
+        prior = [c.volume for c in state.closed_candles[:-1] if c.volume > 0]
+        if not prior:
+            return False
+        avg = sum(prior) / len(prior)
+        return candle.volume < avg * 0.85
 
     def _absorption(self, tick: TickInput, price_up: bool) -> int:
         total = tick.tbq + tick.tsq
@@ -175,7 +224,6 @@ class BookDivergenceEngine:
         return 45
 
     def _liquidity_vacuum(self, tick: TickInput, state: SymbolBookState) -> int:
-        """100 = healthy book, 0 = severe vacuum (inverted for fusion)."""
         depth = float(_total_depth_qty(tick))
         baseline = state.depth_baseline or depth
         if baseline <= 0:
@@ -222,13 +270,3 @@ class BookDivergenceEngine:
         if last >= baseline:
             return 65
         return 40
-
-    def _breakout_detected(
-        self, tick: TickInput, state: SymbolBookState, price_up: bool
-    ) -> bool:
-        if len(state.ltp_window) < 5:
-            return False
-        window = state.ltp_window[:-1]
-        if price_up:
-            return tick.ltp > max(window)
-        return tick.ltp < min(window)

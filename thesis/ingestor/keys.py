@@ -1,6 +1,7 @@
-"""Redis key patterns from THESIS spec §5.1."""
+"""Redis key patterns from THESIS spec §4.1."""
 
 WINDOW_CAP = 20
+CLOSED_CANDLE_CAP = 3
 
 
 def tick_hash(symbol: str) -> str:
@@ -29,3 +30,11 @@ def baseline_vol(symbol: str) -> str:
 
 def data_stale_key(symbol: str) -> str:
     return f"meta:data_stale:{symbol}"
+
+
+def candle_1m_current(symbol: str) -> str:
+    return f"candle:1m:current:{symbol}"
+
+
+def candle_1m_closed(symbol: str) -> str:
+    return f"candle:1m:closed:{symbol}"

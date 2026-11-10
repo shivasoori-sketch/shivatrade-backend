@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from thesis.ingestor import FeedIngestor, InMemoryRedisStore, MockBrokerAdapter, ThesisRedisStore
 from thesis.ingestor import keys
+from thesis.ingestor.feed import FeedIngestor, MockBrokerAdapter
+from thesis.ingestor.redis_store import InMemoryRedisStore, ThesisRedisStore
 from thesis.runtime import ThesisRuntime
 
 

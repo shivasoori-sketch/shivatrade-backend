@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from thesis.api.schemas import (
     BookResponse,
@@ -15,6 +16,9 @@ from thesis.api.schemas import (
     CreateTradeResponse,
     ExitRequest,
     ExitResponse,
+    IngestHealthResponse,
+    IngestTickRequest,
+    IngestTickResponse,
     StateResponse,
     TradeSummaryResponse,
 )
@@ -24,6 +28,13 @@ from thesis.types import Direction, ThesisCondition, TradeThesis
 router = APIRouter(prefix="", tags=["thesis"])
 
 
+def _ingest_allowed(request: Request) -> bool:
+    host = (request.client.host if request.client else "").lower()
+    if host in ("127.0.0.1", "::1", "localhost", "testclient"):
+        return True
+    return os.environ.get("THESIS_INGEST_ALLOW_REMOTE", "") == "1"
+
+
 def _conditions_from_schema(items: list[ConditionIn]) -> list[ThesisCondition]:
     return [
         ThesisCondition(
@@ -31,6 +42,20 @@ def _conditions_from_schema(items: list[ConditionIn]) -> list[ThesisCondition]:
         )
         for c in items
     ]
+
+
+@router.get("/ingest/health", response_model=IngestHealthResponse)
+def ingest_health() -> IngestHealthResponse:
+    return IngestHealthResponse()
+
+
+@router.post("/ingest/tick", response_model=IngestTickResponse)
+def ingest_tick(body: IngestTickRequest, request: Request) -> IngestTickResponse:
+    if not _ingest_allowed(request):
+        raise HTTPException(status_code=403, detail="ingest allowed from localhost only")
+    rt = get_runtime()
+    rt.ingestor.on_raw_tick(body.symbol, body.raw, timestamp=body.ts)
+    return IngestTickResponse(data_stale=rt.store.is_data_stale(body.symbol))
 
 
 @router.post("/trade", response_model=CreateTradeResponse)
@@ -113,6 +138,10 @@ def get_trade_state(trade_id: str) -> StateResponse:
             for c in out.conditions
         ],
         data_stale=rt.store.is_data_stale(rec.thesis.symbol),
+        annotation=out.annotation,
+        intermediate_signal=(
+            out.intermediate_signal.value if out.intermediate_signal else None
+        ),
     )
 
 

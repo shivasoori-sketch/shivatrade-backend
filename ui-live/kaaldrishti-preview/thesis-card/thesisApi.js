@@ -52,7 +52,8 @@ export function openStateStream(tradeId, { onState, onPing, onError }) {
         onPing?.(data);
         return;
       }
-      if (data.state) onState(data);
+      if (data.type && data.type !== "ping") onState(data);
+      else if (data.state) onState({ ...data, type: "confirmed_state" });
     } catch (e) {
       onError?.(e);
     }

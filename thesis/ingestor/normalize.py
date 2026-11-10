@@ -2,7 +2,31 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from thesis.types import DepthLevel, Ohlc, TickInput
+
+
+def _parse_timestamp(value: object) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        raw = value.strip().replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(raw).timestamp()
+        except ValueError:
+            return None
+    return None
+
+
+def _coerce_timestamp(raw: dict, timestamp: float | None) -> float:
+    if timestamp is not None:
+        return float(timestamp)
+    for key in ("timestamp", "exchange_timestamp", "ts", "last_trade_time"):
+        parsed = _parse_timestamp(raw.get(key))
+        if parsed is not None:
+            return parsed
+    return 0.0
 
 
 def _depth_side(levels: list[dict] | None) -> tuple[DepthLevel, ...]:
@@ -26,21 +50,25 @@ def normalize_broker_tick(raw: dict, *, symbol: str, timestamp: float | None = N
     h = float(raw.get("high") or raw.get("ohlc", {}).get("high") or ltp)
     lo = float(raw.get("low") or raw.get("ohlc", {}).get("low") or ltp)
     c = float(raw.get("close") or raw.get("ohlc", {}).get("close") or ltp)
-    ts = float(
-        timestamp
-        if timestamp is not None
-        else raw.get("timestamp")
-        or raw.get("exchange_timestamp")
-        or raw.get("ts")
-        or 0.0
-    )
+    ts = _coerce_timestamp(raw, timestamp)
     depth = raw.get("depth") or {}
     bid = depth.get("buy") or depth.get("bid") or raw.get("depth_bid") or []
     ask = depth.get("sell") or depth.get("ask") or raw.get("depth_ask") or []
 
+    ltpc = raw.get("ltpc") or {}
+    ltq = int(
+        raw.get("ltq")
+        or raw.get("last_traded_quantity")
+        or ltpc.get("ltq")
+        or ltpc.get("ltt")
+        or raw.get("last_quantity")
+        or 0
+    )
+
     return TickInput(
         ltp=ltp,
         ohlc=Ohlc(open=o, high=h, low=lo, close=c),
+        ltq=ltq,
         vtt=int(raw.get("volume_traded") or raw.get("vtt") or raw.get("volume") or 0),
         tbq=int(raw.get("total_buy_quantity") or raw.get("tbq") or 0),
         tsq=int(raw.get("total_sell_quantity") or raw.get("tsq") or 0),

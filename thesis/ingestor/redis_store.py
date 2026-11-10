@@ -12,6 +12,7 @@ from thesis.types import DepthLevel, Ohlc, TickInput
 def _tick_to_hash(tick: TickInput) -> dict[str, str]:
     return {
         "ltp": str(tick.ltp),
+        "ltq": str(tick.ltq),
         "open": str(tick.ohlc.open),
         "high": str(tick.ohlc.high),
         "low": str(tick.ohlc.low),
@@ -43,6 +44,7 @@ def tick_from_hash(data: dict[str, str]) -> TickInput | None:
     )
     return TickInput(
         ltp=float(data["ltp"]),
+        ltq=int(data.get("ltq") or 0),
         ohlc=Ohlc(
             open=float(data["open"]),
             high=float(data["high"]),
@@ -62,6 +64,7 @@ def tick_from_hash(data: dict[str, str]) -> TickInput | None:
 class RedisLike(Protocol):
     def hset(self, name: str, mapping: dict[str, str]) -> None: ...
     def hgetall(self, name: str) -> dict[str, str]: ...
+    def delete(self, name: str) -> None: ...
     def rpush(self, name: str, value: str) -> None: ...
     def ltrim(self, name: str, start: int, end: int) -> None: ...
     def lrange(self, name: str, start: int, end: int) -> list[str]: ...
@@ -109,6 +112,11 @@ class InMemoryRedisStore:
 
     def get(self, name: str) -> str | None:
         return self._strings.get(name)
+
+    def delete(self, name: str) -> None:
+        self._hashes.pop(name, None)
+        self._lists.pop(name, None)
+        self._strings.pop(name, None)
 
 
 class ThesisRedisStore:
