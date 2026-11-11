@@ -17,6 +17,12 @@ export async function createTrade(body) {
   return res.json();
 }
 
+export async function fetchActiveTrade() {
+  const res = await fetch(url("/trade/active"), { cache: "no-store" });
+  if (!res.ok) throw new Error(`active trade ${res.status}`);
+  return res.json();
+}
+
 export async function fetchTrade(tradeId) {
   const res = await fetch(url(`/trade/${tradeId}`), { cache: "no-store" });
   if (!res.ok) throw new Error(`trade ${res.status}`);

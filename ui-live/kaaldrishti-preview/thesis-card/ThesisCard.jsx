@@ -61,6 +61,8 @@ export default function ThesisCard({
   showBookLine = true,
   demoHref,
   demoBanner,
+  sessionBanner,
+  bootMessage,
 }) {
   if (idle || !trade) {
     return (
@@ -70,8 +72,8 @@ export default function ThesisCard({
           <span className={stateClass("IDLE")}>No trade</span>
         </header>
         <p className="thesis-idle-copy">
-          Lock a thesis to track hold integrity. Conviction changes only when your thesis
-          changes — not when price twitches.
+          {bootMessage ||
+            "Session watch loads automatically. Lock your own thesis via API when ready — conviction changes only on candle close."}
         </p>
         {demoHref ? (
           <p className="thesis-idle-preview">
@@ -84,13 +86,18 @@ export default function ThesisCard({
 
   const verdict = state?.state || "HOLDS";
   const barPct = book ? Math.min(100, Math.max(0, book.book_score)) : 0;
-  const depth = state?.depth;
+  const depth = state?.depth || null;
 
   return (
     <div className={`thesis-card verdict-${verdict.toLowerCase()}`}>
       {demoBanner ? (
         <p className="thesis-demo-banner" role="note">
           {demoBanner}
+        </p>
+      ) : null}
+      {sessionBanner ? (
+        <p className="thesis-session-banner" role="note">
+          {sessionBanner}
         </p>
       ) : null}
       <header className="thesis-head">

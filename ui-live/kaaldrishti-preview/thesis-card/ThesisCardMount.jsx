@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ThesisCard from "./ThesisCard.jsx";
 import {
+  fetchActiveTrade,
   fetchBook,
   fetchState,
   fetchTrade,
@@ -13,14 +14,22 @@ import {
   demoHoldsHref,
   demoModeFromPage,
 } from "./demoScenario.js";
+import { SESSION_WATCH_BANNER } from "./sessionWatch.js";
 import { bookLineEnabledForLive } from "./thesisUiConfig.js";
 
-const STORAGE_KEY = "thesis_trade_id";
+const USER_STORAGE_KEY = "thesis_trade_id";
 
-function tradeIdFromPage() {
+function explicitTradeIdFromPage() {
   const params = new URLSearchParams(window.location.search);
   if (params.has("demo")) return "";
-  return params.get("trade_id") || sessionStorage.getItem(STORAGE_KEY) || "";
+  return params.get("trade_id") || "";
+}
+
+function persistedUserTradeId() {
+  if (explicitTradeIdFromPage()) return explicitTradeIdFromPage();
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("demo")) return "";
+  return sessionStorage.getItem(USER_STORAGE_KEY) || "";
 }
 
 function formatDuration(ms) {
@@ -45,9 +54,10 @@ function adversePts(trade, ltp) {
 export default function ThesisCardMount() {
   const demoMode = demoModeFromPage();
   const demoFixture = demoMode ? DEMO_SCENARIOS[demoMode] : null;
-  const [tradeId, setTradeId] = useState(() =>
-    demoFixture ? "" : tradeIdFromPage()
-  );
+  const explicitId = explicitTradeIdFromPage();
+  const [tradeId, setTradeId] = useState(explicitId || "");
+  const [sessionWatch, setSessionWatch] = useState(false);
+  const [booting, setBooting] = useState(!demoFixture && !explicitId);
   const [trade, setTrade] = useState(null);
   const [state, setState] = useState(null);
   const [book, setBook] = useState(null);
@@ -61,6 +71,38 @@ export default function ThesisCardMount() {
   useEffect(() => {
     applyDemoNoIndex();
   }, [demoMode]);
+
+  useEffect(() => {
+    if (demoFixture || explicitId) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const active = await fetchActiveTrade();
+        if (cancelled) return;
+        setTradeId(active.trade_id);
+        setSessionWatch(active.mode === "session_watch");
+      } catch {
+        const saved = sessionStorage.getItem(USER_STORAGE_KEY);
+        if (!cancelled && saved) {
+          setTradeId(saved);
+          setSessionWatch(false);
+        }
+      } finally {
+        if (!cancelled) setBooting(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [demoFixture, explicitId]);
+
+  useEffect(() => {
+    if (explicitId) {
+      setTradeId(explicitId);
+      setSessionWatch(false);
+      setBooting(false);
+    }
+  }, [explicitId]);
 
   const refreshBookOnCandleClose = useCallback(
     async (id) => {
@@ -113,21 +155,24 @@ export default function ThesisCardMount() {
   );
 
   useEffect(() => {
-    if (!tradeId) return undefined;
+    if (!tradeId || booting) return undefined;
     let cancelled = false;
 
     (async () => {
       try {
         const [t, s] = await Promise.all([fetchTrade(tradeId), fetchState(tradeId)]);
         if (cancelled) return;
-        sessionStorage.setItem(STORAGE_KEY, tradeId);
+        if (!sessionWatch) {
+          sessionStorage.setItem(USER_STORAGE_KEY, tradeId);
+        }
         setTrade(t);
         setState(s);
+        setSessionWatch(t.mode === "session_watch" || s.mode === "session_watch");
         displayedVerdict.current = s.state;
         setBadgeUpdated(Date.now());
         await refreshBookOnCandleClose(tradeId);
       } catch {
-        if (!cancelled) setTradeId("");
+        if (!cancelled && !sessionWatch) setTradeId("");
       }
     })();
 
@@ -141,7 +186,7 @@ export default function ThesisCardMount() {
       cancelled = true;
       closeWs();
     };
-  }, [tradeId, applyConfirmedState, refreshBookOnCandleClose]);
+  }, [tradeId, booting, applyConfirmedState, refreshBookOnCandleClose, sessionWatch]);
 
   useEffect(() => {
     if (!trade?.created_at) return undefined;
@@ -175,6 +220,18 @@ export default function ThesisCardMount() {
     );
   }
 
+  if (booting) {
+    return (
+      <ThesisCard
+        idle
+        trade={null}
+        state={null}
+        bootMessage="Loading session watch…"
+        demoHref={demoHoldsHref()}
+      />
+    );
+  }
+
   const idle = !tradeId;
 
   return (
@@ -188,6 +245,9 @@ export default function ThesisCardMount() {
       timeInTradeLabel={timeInTradeLabel}
       adversePts={adverse}
       demoHref={idle ? demoHoldsHref() : undefined}
+      sessionBanner={
+        sessionWatch && trade ? SESSION_WATCH_BANNER : undefined
+      }
     />
   );
 }

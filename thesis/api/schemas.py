@@ -29,6 +29,13 @@ class CreateTradeResponse(BaseModel):
     status: str = "locked"
 
 
+class DepthPanelOut(BaseModel):
+    structure: str = ""
+    volume: str = ""
+    oi: str = ""
+    session: str = ""
+
+
 class TradeSummaryResponse(BaseModel):
     trade_id: str
     symbol: str
@@ -39,6 +46,13 @@ class TradeSummaryResponse(BaseModel):
     status: str
     book_score_baseline: int
     created_at: str
+    mode: str = "user"
+    session_message: str = ""
+
+
+class ActiveTradeResponse(TradeSummaryResponse):
+    """GET /trade/active — session watch or existing active id."""
+
 
 
 class StateResponse(BaseModel):
@@ -50,6 +64,8 @@ class StateResponse(BaseModel):
     data_stale: bool = False
     annotation: str = ""
     intermediate_signal: str | None = None
+    mode: str = "user"
+    depth: DepthPanelOut | None = None
 
 
 class BookResponse(BaseModel):

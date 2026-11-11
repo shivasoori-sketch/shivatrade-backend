@@ -10,10 +10,12 @@ import time
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from thesis.api.schemas import (
+    ActiveTradeResponse,
     BookResponse,
     ConditionIn,
     CreateTradeRequest,
     CreateTradeResponse,
+    DepthPanelOut,
     ExitRequest,
     ExitResponse,
     IngestHealthResponse,
@@ -23,6 +25,7 @@ from thesis.api.schemas import (
     TradeSummaryResponse,
 )
 from thesis.runtime import get_runtime
+from thesis.session_watch import SESSION_WATCH_MESSAGE, ensure_session_watch_trade
 from thesis.types import Direction, ThesisCondition, TradeThesis
 
 router = APIRouter(prefix="", tags=["thesis"])
@@ -33,6 +36,47 @@ def _ingest_allowed(request: Request) -> bool:
     if host in ("127.0.0.1", "::1", "localhost", "testclient"):
         return True
     return os.environ.get("THESIS_INGEST_ALLOW_REMOTE", "") == "1"
+
+
+def _depth_panel(rt, rec) -> DepthPanelOut:
+    sym = rec.thesis.symbol
+    stale = rt.store.is_data_stale(sym)
+    tick = rt.store.latest_tick(sym)
+    vol = (
+        "Awaiting candle close for follow-through read"
+        if not stale
+        else "Feed gap — data marked stale"
+    )
+    oi = "From ingest ticks (OI on candle close)" if tick else "Awaiting ingest ticks"
+    session = (
+        f"Session watch · {sym}"
+        if rec.watch_kind == "session_watch"
+        else f"Locked thesis · {sym}"
+    )
+    return DepthPanelOut(
+        structure="Thesis rules on candle close (not tick color)",
+        volume=vol,
+        oi=oi,
+        session=session,
+    )
+
+
+def _trade_summary(rec) -> TradeSummaryResponse:
+    t = rec.thesis
+    mode = rec.watch_kind if rec.watch_kind else "user"
+    return TradeSummaryResponse(
+        trade_id=rec.trade_id,
+        symbol=t.symbol,
+        direction=t.direction.value,
+        entry_price=t.entry_price,
+        stop_loss=t.stop_loss,
+        target=t.target,
+        status=rec.status,
+        book_score_baseline=rec.book_score_baseline,
+        created_at=rec.created_at,
+        mode=mode,
+        session_message=SESSION_WATCH_MESSAGE if mode == "session_watch" else "",
+    )
 
 
 def _conditions_from_schema(items: list[ConditionIn]) -> list[ThesisCondition]:
@@ -80,6 +124,7 @@ def create_trade(body: CreateTradeRequest) -> CreateTradeResponse:
     if baseline is None:
         baseline = 50
     rec = rt.registry.create(thesis, conditions, book_score_baseline=baseline)
+    rec.watch_kind = "user"
     rt.pipeline.register_trade(rec.trade_id, thesis)
     if tick is not None:
         rt.pipeline.on_tick(body.symbol, tick)
@@ -89,24 +134,26 @@ def create_trade(body: CreateTradeRequest) -> CreateTradeResponse:
     )
 
 
+@router.get("/trade/active", response_model=ActiveTradeResponse)
+def get_active_trade() -> ActiveTradeResponse:
+    rt = get_runtime()
+    rec = ensure_session_watch_trade(rt)
+    summary = _trade_summary(rec)
+    return ActiveTradeResponse(**summary.model_dump())
+
+
 @router.get("/trade/{trade_id}", response_model=TradeSummaryResponse)
 def get_trade(trade_id: str) -> TradeSummaryResponse:
+    if trade_id == "active":
+        raise HTTPException(
+            status_code=400,
+            detail="use GET /trade/active for session watch",
+        )
     rt = get_runtime()
     rec = rt.registry.get(trade_id)
     if not rec:
         raise HTTPException(status_code=404, detail="trade not found")
-    t = rec.thesis
-    return TradeSummaryResponse(
-        trade_id=trade_id,
-        symbol=t.symbol,
-        direction=t.direction.value,
-        entry_price=t.entry_price,
-        stop_loss=t.stop_loss,
-        target=t.target,
-        status=rec.status,
-        book_score_baseline=rec.book_score_baseline,
-        created_at=rec.created_at,
-    )
+    return _trade_summary(rec)
 
 
 @router.get("/trade/{trade_id}/state", response_model=StateResponse)
@@ -115,6 +162,8 @@ def get_trade_state(trade_id: str) -> StateResponse:
     rec = rt.registry.get(trade_id)
     if not rec:
         raise HTTPException(status_code=404, detail="trade not found")
+    depth = _depth_panel(rt, rec)
+    mode = rec.watch_kind or "user"
     if not rec.last_thesis:
         return StateResponse(
             trade_id=trade_id,
@@ -126,6 +175,8 @@ def get_trade_state(trade_id: str) -> StateResponse:
                 for c in rec.conditions
             ],
             data_stale=rt.store.is_data_stale(rec.thesis.symbol),
+            mode=mode,
+            depth=depth,
         )
     out = rec.last_thesis
     return StateResponse(
@@ -142,6 +193,8 @@ def get_trade_state(trade_id: str) -> StateResponse:
         intermediate_signal=(
             out.intermediate_signal.value if out.intermediate_signal else None
         ),
+        mode=mode,
+        depth=depth,
     )
 
 

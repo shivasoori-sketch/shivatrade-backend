@@ -34,6 +34,7 @@ class TradeRecord:
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     exit_payload: dict | None = None
+    watch_kind: str = "user"
 
     def note_state_change(self, output: ThesisOutput, ts: float) -> bool:
         """Legacy: true when confirmed state changes."""
@@ -95,6 +96,7 @@ class TradeRegistry:
     def __init__(self) -> None:
         self._trades: dict[str, TradeRecord] = {}
         self._by_symbol: dict[str, list[str]] = {}
+        self.session_watch_trade_id: str | None = None
 
     def create(
         self,
