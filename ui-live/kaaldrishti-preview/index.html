@@ -37,8 +37,8 @@ html.light .thesis-validation-notice{background:#fff;border-color:#c7d4e4;color:
 </div>
 <div id="thesis-card-root"></div>
 
-<link rel="stylesheet" href="/kaaldrishti/thesis-card/thesis-card.css?v=9">
-<script type="module" src="/kaaldrishti/thesis-card/thesis-card.js?v=9"></script>
+<link rel="stylesheet" href="/kaaldrishti/thesis-card/thesis-card.css?v=10">
+<script type="module" src="/kaaldrishti/thesis-card/thesis-card.js?v=10"></script>
 <section class="kd-legacy-bloated" aria-label="Recorder assessment">
 <strong id="assessment-status" role="status">Connecting</strong>
 <p>Last capture <time id="assessment-capture">Unavailable</time></p>
@@ -97,50 +97,28 @@ html.light .thesis-validation-notice{background:#fff;border-color:#c7d4e4;color:
  floatUrl.searchParams.set("theme", theme);
  let floating;
  floatButton.addEventListener("click", async () => {
-   document.getElementById("float-status").textContent = "";
+   const status = document.getElementById("float-status");
+   status.textContent = "";
    if (floating && !floating.closed) {
      floating.focus();
      return;
    }
+   const target = floatUrl.href;
    if (window.documentPictureInPicture?.requestWindow) {
      try {
-       floating = await window.documentPictureInPicture.requestWindow({width: 360, height: 440});
-       const doc = floating.document;
-       doc.title = "THESIS";
-       const response = await fetch(floatUrl);
-       if (!response.ok) throw new Error("Widget unavailable");
-       const compact = new DOMParser().parseFromString(await response.text(), "text/html");
-       doc.head.append(doc.importNode(compact.querySelector("style"), true));
-       compact.querySelectorAll('link[rel="stylesheet"][href*="thesis-card"]').forEach(link => {
-         doc.head.append(doc.importNode(link, true));
-       });
-       const panel = doc.importNode(compact.querySelector("main"), true);
-       panel.querySelectorAll("script").forEach(script => script.remove());
-       doc.body.append(panel);
-       doc.documentElement.classList.toggle("light", theme === "light");
-       panel.querySelectorAll("a").forEach(link => {
-         const url = new URL(link.getAttribute("href"), floatUrl);
-         link.href = url.href;
-         if (url.searchParams.has("theme")) {
-           link.addEventListener("click", event => {
-             event.preventDefault();
-             doc.documentElement.classList.toggle("light", url.searchParams.get("theme") === "light");
-           });
-         } else {
-           link.target = "_blank";
-           link.rel = "noopener";
-         }
-       });
-       const thesisScript = doc.createElement("script");
-       thesisScript.type = "module";
-       thesisScript.src = new URL("/kaaldrishti/thesis-card/thesis-card.js?v=9", floatUrl);
-       doc.head.append(thesisScript);
+       floating = await window.documentPictureInPicture.requestWindow({ width: 380, height: 520 });
+       floating.location.replace(target);
        return;
      } catch {
        if (floating && !floating.closed) floating.close();
+       floating = undefined;
      }
    }
-   document.getElementById("float-status").textContent =
-     "Could not open an always-on-top window. Open the full dashboard in desktop Chrome or Edge and try again.";
+   floating = window.open(target, "thesis-float", "popup,width=380,height=520,noopener");
+   if (floating) return;
+   status.textContent =
+     "Could not open the floating widget — allow popups or open " +
+     target.replace(location.origin, "") +
+     " in a new tab.";
  });
 </script></main></html>
