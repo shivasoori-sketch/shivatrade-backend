@@ -37,8 +37,8 @@ html.light .thesis-validation-notice{background:#fff;border-color:#c7d4e4;color:
 </div>
 <div id="thesis-card-root"></div>
 
-<link rel="stylesheet" href="/kaaldrishti/thesis-card/thesis-card.css?v=8">
-<script type="module" src="/kaaldrishti/thesis-card/thesis-card.js?v=8"></script>
+<link rel="stylesheet" href="/kaaldrishti/thesis-card/thesis-card.css?v=9">
+<script type="module" src="/kaaldrishti/thesis-card/thesis-card.js?v=9"></script>
 <section class="kd-legacy-bloated" aria-label="Recorder assessment">
 <strong id="assessment-status" role="status">Connecting</strong>
 <p>Last capture <time id="assessment-capture">Unavailable</time></p>
@@ -131,9 +131,12 @@ html.light .thesis-validation-notice{background:#fff;border-color:#c7d4e4;color:
            link.rel = "noopener";
          }
        });
+       const bookFlag = doc.createElement("script");
+       bookFlag.textContent = "window.THESIS_BOOK_LINE_ENABLED=false;";
+       doc.head.append(bookFlag);
        const thesisScript = doc.createElement("script");
        thesisScript.type = "module";
-       thesisScript.src = new URL("/kaaldrishti/thesis-card/thesis-card.js?v=8", floatUrl);
+       thesisScript.src = new URL("/kaaldrishti/thesis-card/thesis-card.js?v=9", floatUrl);
        doc.head.append(thesisScript);
        return;
      } catch {
