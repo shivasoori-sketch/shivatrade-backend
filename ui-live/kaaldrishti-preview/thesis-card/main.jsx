@@ -1,13 +1,25 @@
 import { createRoot } from "react-dom/client";
-import ThesisCardMount from "./ThesisCardMount.jsx";
-import { ensureDemoQueryFromLegacy } from "./demoScenario.js";
 import "./thesis-card.css";
 
-if (typeof window !== "undefined" && ensureDemoQueryFromLegacy()) {
-  /* redirecting; do not mount */
-} else {
+async function boot() {
+  if (typeof window === "undefined") return;
   const rootEl = document.getElementById("thesis-card-root");
-  if (rootEl) {
-    createRoot(rootEl).render(<ThesisCardMount />);
+  if (!rootEl) return;
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("preview")) {
+    const { ensureDemoQueryFromLegacy } = await import("./demoScenario.js");
+    if (ensureDemoQueryFromLegacy()) return;
   }
+
+  if (params.has("demo")) {
+    const { default: DemoThesisMount } = await import("./DemoThesisMount.jsx");
+    createRoot(rootEl).render(<DemoThesisMount />);
+    return;
+  }
+
+  const { default: LiveThesisMount } = await import("./LiveThesisMount.jsx");
+  createRoot(rootEl).render(<LiveThesisMount />);
 }
+
+boot();

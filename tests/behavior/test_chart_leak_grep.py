@@ -22,10 +22,12 @@ def test_engine_no_verdict_from_price_color_vars() -> None:
 def test_ui_bundle_no_badge_interval_or_annotation_animation() -> None:
     root = REPO / "ui-live/kaaldrishti-preview/thesis-card"
     js = (root / "thesis-card.js").read_text(encoding="utf-8", errors="ignore")
-    mount = (root / "ThesisCardMount.jsx").read_text(encoding="utf-8")
-    assert "thesis-annotation" in js
-    assert "thesis-badge" in js
-    assert "Awaiting candle close" in js
+    card = (root / "ThesisCard.jsx").read_text(encoding="utf-8")
+    mount = (root / "LiveThesisMount.jsx").read_text(encoding="utf-8")
+    assert "thesis-annotation" in card
+    assert "thesis-badge" in card or "thesis-badge" in js
+    ui = (root / "thesisUiConfig.js").read_text(encoding="utf-8")
+    assert "Awaiting candle close" in ui
     assert "@keyframes" not in js
     assert "animation:" not in js
     assert "className=\"pulse\"" not in js

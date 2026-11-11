@@ -59,27 +59,26 @@ export default function ThesisCard({
   idle = false,
   isDemo = false,
   showBookLine = true,
-  demoHref,
   demoBanner,
   sessionBanner,
   bootMessage,
+  idleMessage,
+  loading = false,
 }) {
-  if (idle || !trade) {
+  if (loading || idle || !trade) {
     return (
       <div className="thesis-card thesis-card-idle">
         <header className="thesis-head">
           <span className="thesis-title">THESIS</span>
-          <span className={stateClass("IDLE")}>No trade</span>
+          <span className={stateClass(loading ? "IDLE" : "IDLE")}>
+            {loading ? "Connecting" : "No trade"}
+          </span>
         </header>
         <p className="thesis-idle-copy">
           {bootMessage ||
-            "Session watch loads automatically. Lock your own thesis via API when ready — conviction changes only on candle close."}
+            idleMessage ||
+            "Session watch connects to live ingest. Verdicts change on candle close, not every tick."}
         </p>
-        {demoHref ? (
-          <p className="thesis-idle-preview">
-            <a href={demoHref}>View demo (HOLDS)</a>
-          </p>
-        ) : null}
       </div>
     );
   }
