@@ -2443,4 +2443,44 @@
   document.body.appendChild(late);
   window.fitKiteCharts = fitKiteCharts;
   parkSummary();
+
+  function bootDirectChartTrading() {
+    if (window.__mc325DirectChartTradingBoot) return;
+    var hostName = '';
+    try { hostName = String(location.hostname || ''); } catch (err) {}
+    var base = window.MC325_TRADING_BASE || '';
+    if (!base && (hostName === 'localhost' || hostName === '127.0.0.1')) {
+      base = 'http://127.0.0.1:6161/mc325/trading';
+    }
+    function mountNow() {
+      if (typeof window.mountMc325DirectChartTrading !== 'function') return;
+      try { window.mountMc325DirectChartTrading(); } catch (err) {}
+    }
+    if (typeof window.mountMc325DirectChartTrading === 'function') {
+      window.__mc325DirectChartTradingBoot = true;
+      mountNow();
+      window.addEventListener('mc325-chart-loaded', mountNow);
+      return;
+    }
+    if (!base) return;
+    window.__mc325DirectChartTradingBoot = true;
+    window.addEventListener('mc325-chart-loaded', mountNow);
+    var files = ['wsClient.js', 'useOrders.js', 'ChartTradingOverlay.js', 'OrderTicket.js', 'TradingToolbar.js', 'mount.js'];
+    var index = 0;
+    function next() {
+      if (index >= files.length) {
+        mountNow();
+        return;
+      }
+      var script = document.createElement('script');
+      script.src = String(base).replace(/\/$/, '') + '/' + files[index];
+      index += 1;
+      script.async = false;
+      script.onload = next;
+      script.onerror = function () {};
+      document.head.appendChild(script);
+    }
+    next();
+  }
+  try { bootDirectChartTrading(); } catch (err) {}
 })();
