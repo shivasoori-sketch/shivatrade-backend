@@ -23,6 +23,12 @@ ABSENT = re.compile(
 )
 
 
+def _without_library(page: str) -> str:
+    start = page.index('<script id="lw-lib">')
+    end = page.index("</script>", start)
+    return page[:start] + page[end:]
+
+
 class CloseViewTests(unittest.TestCase):
     def test_three_friday_closes(self):
         closes = load_closes()
@@ -53,8 +59,13 @@ class CloseViewTests(unittest.TestCase):
             self.assertEqual(view.last_valid_tick, "")
             self.assertEqual(view.last_engine_assessment, "")
             self.assertEqual(view.chart_overlays, ())
-            self.assertEqual(view.three_minute_bars, ())
+            self.assertEqual(len(view.three_minute_bars), 125)
+            self.assertEqual(view.three_minute_bars[0].time_ist[:10], "2026-11-13")
+            self.assertEqual(view.three_minute_bars[-1].time_ist, "2026-11-13T15:27:00+05:30")
+            self.assertEqual(view.price, view.three_minute_bars[-1].close)
             self.assertEqual(view.snapshot_seq, views[0].snapshot_seq)
+            for bar in view.three_minute_bars:
+                self.assertNotEqual((bar.open, bar.high, bar.low, bar.close), view.candle)
             self.assertEqual(
                 view.candle,
                 {
@@ -92,31 +103,25 @@ class CloseViewTests(unittest.TestCase):
         self.assertIn("width: 50%", page)
         self.assertIn("flex-direction: column", page)
         self.assertIn("padding: 16px 28px", page)
-        self.assertIn("lightweight-charts.standalone.production.js", page)
+        self.assertIn("TradingView Lightweight Charts™ v5.3.0", page)
         self.assertIn("LightweightCharts.CandlestickSeries", page)
         self.assertIn("series.setData(item.bars)", page)
-        self.assertEqual(page.count('"bars":[]'), 3)
+        self.assertNotIn('"bars":[]', page)
+        self.assertEqual(page.count('"time":'), 375)
         self.assertEqual(page.count('"price_lines":[]'), 3)
         self.assertEqual(page.count('"markers":[]'), 3)
         self.assertEqual(page.count("snapshot_seq 0"), 6)
+        self.assertEqual(page.count("125 candles"), 3)
+        self.assertIn("09:15-15:27 IST", page)
         self.assertIn("/minutes/3/", page)
         self.assertIn("NSE_INDEX|Nifty 50", page)
         self.assertIn("NSE_INDEX|Nifty Bank", page)
         self.assertIn("BSE_INDEX|SENSEX", page)
-        for daily in (
-            "25209.85",
-            "25246.35",
-            "25054.4",
-            "61300.55",
-            "60780.55",
-            "81833.78",
-            "81879.51",
-            "81288.75",
-            "13 Nov 2026",
-        ):
-            self.assertNotIn(daily, page)
-        self.assertNotIn("<path", page)
-        self.assertNotIn("<svg", page)
+        chrome = _without_library(page)
+        self.assertNotIn("25209.85,25246.35,25054.4,25144.3", chrome)
+        self.assertNotIn("13 Nov 2026", chrome)
+        self.assertNotIn("<path", chrome)
+        self.assertNotIn("<svg", chrome)
         self.assertEqual(page.count("3-minute spot"), 3)
         for title in ROW_TITLES:
             self.assertEqual(page.count(title), 3)
@@ -131,7 +136,7 @@ class CloseViewTests(unittest.TestCase):
         self.assertNotIn("ENTRY_POLICY_DISABLED", page)
         self.assertIn("RESEARCH_ONLY", page)
         self.assertIn("UNDETERMINED", page)
-        self.assertIsNone(ABSENT.search(page))
+        self.assertIsNone(ABSENT.search(_without_library(page)))
         self.assertNotIn("unused", page)
         library = (PACKAGE / "vendor" / "lightweight-charts.standalone.production.js").read_text(
             encoding="utf-8"
@@ -143,9 +148,10 @@ class CloseViewTests(unittest.TestCase):
         self.assertLess(page.find("</nav>"), page.find('class="panel panel-NIFTY"'))
         session = render_session()
         self.assertIn(">DEGRADED<", session)
-        self.assertIsNone(ABSENT.search(session))
+        self.assertIsNone(ABSENT.search(_without_library(session)))
+        self.assertEqual(session.count('"bars":[]'), 3)
         self.assertNotIn("25144.3", session)
-        self.assertNotIn("<path", session)
+        self.assertNotIn("<path", _without_library(session))
 
     def test_build_does_not_open_a_socket(self):
         def boom(*_args, **_kwargs):

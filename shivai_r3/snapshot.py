@@ -6,8 +6,12 @@ this package has not computed a zone, so those values are left empty.
 """
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 
 from shivai_r3.closes import HistoricalClose, load_closes
 from shivai_r3.reference.shivai_core import (
@@ -39,6 +43,20 @@ class InsightRow:
     value: str
 
 
+_BAR_TOKEN = re.compile(r"^(?:0|[1-9]\d*)(?:\.\d+)?$")
+_THREE_MINUTE = Path(__file__).resolve().parent / "fixtures" / "three_minute_2026_11_13.json"
+
+
+@dataclass(frozen=True)
+class ThreeMinuteBar:
+    time_ist: str
+    unix_s: int
+    open: str
+    high: str
+    low: str
+    close: str
+
+
 @dataclass(frozen=True)
 class InstrumentView:
     instrument: str
@@ -53,9 +71,9 @@ class InstrumentView:
     reject_reasons: tuple[str, ...]
     snapshot_seq: int
     instrument_key: str
-    # Friday daily OHLC, kept off the chart. A 3-minute series is separate and empty.
+    # Friday daily OHLC, kept off the chart. three_minute_bars is the API series.
     candle: tuple[str, str, str, str] | None = None
-    three_minute_bars: tuple[dict, ...] = ()
+    three_minute_bars: tuple[ThreeMinuteBar, ...] = ()
 
 
 def _reference_constants() -> dict:
@@ -81,6 +99,47 @@ def _rows(snapshot: dict) -> tuple[InsightRow, ...]:
     return tuple(InsightRow(title, value) for title, value in zip(ROW_TITLES, values, strict=True))
 
 
+def load_three_minute_bars() -> dict[str, tuple[ThreeMinuteBar, ...]]:
+    """Last cash session returned by the historical 3-minute call. No other days."""
+    payload = json.loads(_THREE_MINUTE.read_text(encoding="utf-8"))
+    session_date = payload["session_date"]
+    series = payload["series"]
+    if set(series) != {close.instrument_key for close in load_closes()}:
+        raise ValueError("3-minute series keys do not match the three indexes")
+    daily = {
+        close.instrument_key: (close.open_text, close.high_text, close.low_text, close.close_text)
+        for close in load_closes()
+    }
+    loaded: dict[str, tuple[ThreeMinuteBar, ...]] = {}
+    for key, rows in series.items():
+        bars: list[ThreeMinuteBar] = []
+        for row in rows:
+            if len(row) != 7:
+                raise ValueError("3-minute row is missing a field")
+            stamp, open_, high, low, close, _volume, _oi = row
+            if not stamp.startswith(session_date + "T") or not stamp.endswith("+05:30"):
+                raise ValueError("3-minute bar is outside the returned session")
+            for token in (open_, high, low, close):
+                if not isinstance(token, str) or _BAR_TOKEN.fullmatch(token) is None:
+                    raise ValueError("3-minute price is not a decimal token")
+            prices = (open_, high, low, close)
+            if prices == daily[key]:
+                raise ValueError("daily OHLC cannot be plotted as a 3-minute bar")
+            o, h, l, c = (Decimal(token) for token in prices)
+            if h < max(o, c) or l > min(o, c) or l > h:
+                raise ValueError("3-minute bar breaks high or low")
+            unix_s = int(datetime.fromisoformat(stamp).timestamp())
+            bars.append(ThreeMinuteBar(stamp, unix_s, open_, high, low, close))
+        bars.sort(key=lambda bar: bar.unix_s)
+        if len(bars) < 2 or len({bar.unix_s for bar in bars}) != len(bars):
+            raise ValueError("3-minute session is not a series")
+        for earlier, later in zip(bars, bars[1:]):
+            if later.unix_s - earlier.unix_s != 180:
+                raise ValueError("3-minute bars are not 180 seconds apart")
+        loaded[key] = tuple(bars)
+    return loaded
+
+
 def _view(
     instrument: str,
     price: str,
@@ -89,10 +148,10 @@ def _view(
     snapshot: dict,
     instrument_key: str,
     candle: tuple[str, str, str, str] | None = None,
+    bars: tuple[ThreeMinuteBar, ...] = (),
 ) -> InstrumentView:
     if source_quality == Quality.LIVE_VERIFIED.value:
         raise ValueError("source_quality cannot be the verified state")
-    # No three_minute_bars.json exists in this package. Do not turn the daily OHLC into bars.
     return InstrumentView(
         instrument=instrument,
         price=price,
@@ -107,7 +166,7 @@ def _view(
         snapshot_seq=snapshot["snapshot_seq"],
         instrument_key=instrument_key,
         candle=candle,
-        three_minute_bars=(),
+        three_minute_bars=bars,
     )
 
 
@@ -115,18 +174,22 @@ def close_views() -> tuple[InstrumentView, ...]:
     """Friday closes. source_quality is the reference value STALE."""
     snapshot = _reference_constants()
     by_name = {close.instrument: close for close in load_closes()}
+    series = load_three_minute_bars()
     views: list[InstrumentView] = []
     for label, fixture_name in _SELECTOR:
         close: HistoricalClose = by_name[fixture_name]
+        bars = series[close.instrument_key]
+        last = bars[-1]
         views.append(
             _view(
                 label,
-                close.close_text,
-                close.exchange_timestamp.date().isoformat(),
+                last.close,
+                last.time_ist[:10],
                 Quality.STALE.value,
                 snapshot,
                 close.instrument_key,
                 (close.open_text, close.high_text, close.low_text, close.close_text),
+                bars,
             )
         )
     return tuple(views)
@@ -165,7 +228,17 @@ def to_plain(view: InstrumentView) -> dict:
         "instrument_key": view.instrument_key,
         "chart_overlays": list(view.chart_overlays),
         "candle": list(view.candle) if view.candle else None,
-        "three_minute_bars": list(view.three_minute_bars),
+        "three_minute_bars": [
+            {
+                "time_ist": bar.time_ist,
+                "unix_s": bar.unix_s,
+                "open": bar.open,
+                "high": bar.high,
+                "low": bar.low,
+                "close": bar.close,
+            }
+            for bar in view.three_minute_bars
+        ],
         "five_rows": [{"title": row.title, "value": row.value} for row in view.five_rows],
         "entry_eligible": view.entry_eligible,
         "reject_reasons": list(view.reject_reasons),
