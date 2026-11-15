@@ -18,9 +18,11 @@ body {
   font: 16px/1.4 system-ui, sans-serif;
 }
 .switch { display: flex; gap: 8px; padding: 14px 28px; border-bottom: 1px solid #dbe3ee; }
-.switch input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); border: 0; }
+.switch-input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); border: 0; }
 .switch label { border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 14px; cursor: pointer; }
-.switch input:checked + label { background: #0f172a; color: #fff; border-color: #0f172a; }
+#i-NIFTY:checked ~ .switch label[for="i-NIFTY"],
+#i-BANKNIFTY:checked ~ .switch label[for="i-BANKNIFTY"],
+#i-SENSEX:checked ~ .switch label[for="i-SENSEX"] { background: #0f172a; color: #fff; border-color: #0f172a; }
 .panel { display: none; flex: 1; min-height: 0; flex-direction: column; }
 #i-NIFTY:checked ~ .panel-NIFTY,
 #i-BANKNIFTY:checked ~ .panel-BANKNIFTY,
@@ -130,23 +132,25 @@ def _panel(view: InstrumentView) -> str:
 
 
 def _page(views: tuple[InstrumentView, ...]) -> str:
-    controls = ['<nav class="switch">']
+    # Radios are siblings before the panels. A nav around them hides every panel,
+    # because :checked ~ .panel cannot see out of that nav.
+    inputs = []
+    labels = ['<nav class="switch">']
     panels = []
     for index, view in enumerate(views):
         checked = " checked" if index == 0 else ""
         ident = html.escape(view.instrument)
-        controls.append(
-            f'<input id="i-{ident}" type="radio" name="instrument"{checked}>'
-            f'<label for="i-{ident}">{ident}</label>'
+        inputs.append(
+            f'<input id="i-{ident}" class="switch-input" type="radio" name="instrument"{checked}>'
         )
+        labels.append(f'<label for="i-{ident}">{ident}</label>')
         panels.append(_panel(view))
-    controls.append("</nav>")
-    # Inputs precede the panels so :checked ~ .panel can show one instrument.
+    labels.append("</nav>")
     return (
         "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
         f"<title>SHIVAI</title><style>{_CSS}</style></head><body>"
-        f'{"".join(controls)}{"".join(panels)}'
+        f'{"".join(inputs)}{"".join(labels)}{"".join(panels)}'
         "</body></html>"
     )
 
