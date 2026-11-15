@@ -1728,6 +1728,8 @@
     dialog.dataset.kiteAutoLevels = '1';
     dialog.dataset.kiteDismissed = '1';
     dialog.dataset.kiteClosedAt = String(Date.now());
+    dialog.dataset.kiteLevelsOpen = '';
+    document.documentElement.dataset.kiteLevelsAsked = '';
     dialog.classList.add('kite-dismissed');
     dialog.hidden = true;
     dialog.removeAttribute('open');
@@ -1739,9 +1741,74 @@
   function releaseAutoLevels(dialog) {
     if (!dialog) return;
     dialog.dataset.kiteDismissed = '';
+    dialog.dataset.kiteLevelsOpen = '1';
     dialog.classList.remove('kite-dismissed');
     dialog.hidden = false;
     dialog.style.removeProperty('display');
+  }
+  function levelsAsked() {
+    return document.documentElement.dataset.kiteLevelsAsked === '1';
+  }
+  function panelRoot(from) {
+    var shell = autoLevelsDialog(from);
+    if (shell) return shell;
+    var node = from && from.nodeType === 1 ? from : from && from.parentElement;
+    var best = node;
+    while (node && node.parentElement && node.parentElement !== document.body && node.parentElement !== document.documentElement) {
+      var parent = node.parentElement;
+      if (parent.id === 'kiteClean' || parent.id === 'kiteCharts' || parent.id === 'kiteStage' || parent.id === 'kiteTickets') break;
+      if (parent.querySelector('#chartCE, #chartPE, #chartREF, .tv-lightweight-charts')) break;
+      if (!/auto trading levels/i.test(parent.textContent || '')) break;
+      best = parent;
+      node = parent;
+    }
+    return best;
+  }
+  function findAutoLevelsRoots() {
+    var roots = [];
+    var seen = [];
+    if (!document.body) return roots;
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    var text;
+    while ((text = walker.nextNode())) {
+      if (!/auto trading levels/i.test(text.nodeValue || '')) continue;
+      var root = panelRoot(text.parentElement);
+      if (!root || seen.indexOf(root) >= 0) continue;
+      seen.push(root);
+      roots.push(root);
+    }
+    document.querySelectorAll('dialog, [role="dialog"]').forEach(function (dialog) {
+      if (seen.indexOf(dialog) >= 0) return;
+      if (!/auto trading levels/i.test(dialog.textContent || '')) return;
+      seen.push(dialog);
+      roots.push(dialog);
+    });
+    return roots;
+  }
+  function isLevelsOpener(node) {
+    if (!node || !node.closest) return false;
+    var button = node.closest('button, [role="button"], [role="tab"]');
+    if (!button) return false;
+    if (button.closest('[data-kite-auto-levels="1"]')) return false;
+    if (autoLevelsDialog(button)) return false;
+    if (button.classList.contains('kiteMtm') || button.id === 'mtm-open' || button.classList.contains('portfolio-mtm-button')) return true;
+    var label = ((button.getAttribute('aria-label') || '') + ' ' + (button.textContent || '')).replace(/\s+/g, ' ').trim().toLowerCase();
+    return label === 'auto' || label === 'manual' || label === 'levels' || /^mtm\b/.test(label) || /trading levels/.test(label);
+  }
+  function showAutoLevels() {
+    document.documentElement.dataset.kiteLevelsAsked = '1';
+    findAutoLevelsRoots().forEach(function (dialog) {
+      releaseAutoLevels(dialog);
+      if (typeof dialog.showModal === 'function' && !dialog.open) {
+        try { dialog.showModal(); } catch (err) {
+          try { dialog.show(); } catch (err2) {}
+        }
+      }
+    });
+  }
+  function sweepAutoLevels() {
+    if (levelsAsked()) return;
+    findAutoLevelsRoots().forEach(closeAutoLevels);
   }
   function closeControl(node) {
     var el = node && node.nodeType === 1 ? node : null;
@@ -1757,13 +1824,9 @@
     dialog.dataset.kiteAutoWatch = '1';
     dialog.dataset.kiteAutoLevels = '1';
     new MutationObserver(function () {
-      if (dialog.dataset.kiteDismissed !== '1') return;
-      var closedAt = Number(dialog.dataset.kiteClosedAt || 0);
-      var bouncing = closedAt && Date.now() - closedAt < 500;
+      if (levelsAsked() || dialog.dataset.kiteDismissed !== '1') return;
       var showing = dialog.open || dialog.hasAttribute('open') || dialog.hidden === false || (dialog.style.display && dialog.style.display !== 'none');
-      if (!showing) return;
-      if (bouncing) closeAutoLevels(dialog);
-      else releaseAutoLevels(dialog);
+      if (showing) closeAutoLevels(dialog);
     }).observe(dialog, { attributes: true, attributeFilter: ['open', 'hidden', 'style', 'class'] });
   }
   function modeCardFrom(node) {
@@ -1826,9 +1889,12 @@
         var native = window.HTMLDialogElement.prototype[name];
         if (typeof native !== 'function') return;
         window.HTMLDialogElement.prototype[name] = function () {
-          var closedAt = Number(this.dataset.kiteClosedAt || 0);
-          if (closedAt && Date.now() - closedAt < 500) return;
-          releaseAutoLevels(this);
+          var levels = this.dataset.kiteAutoLevels === '1' || /auto trading levels/i.test(this.textContent || '');
+          if (levels && !levelsAsked()) {
+            closeAutoLevels(this);
+            return;
+          }
+          if (levels) releaseAutoLevels(this);
           return native.apply(this, arguments);
         };
       });
@@ -1840,6 +1906,17 @@
       });
     });
     document.addEventListener('click', function (event) {
+      if (event.isTrusted && isLevelsOpener(event.target)) {
+        document.documentElement.dataset.kiteLevelsAsked = '1';
+        setTimeout(function () {
+          if (!levelsAsked()) return;
+          var roots = findAutoLevelsRoots();
+          var shut = !roots.length || roots.every(function (panel) {
+            return panel.dataset.kiteDismissed === '1' || (panel.tagName === 'DIALOG' && !panel.open);
+          });
+          if (shut) showAutoLevels();
+        }, 0);
+      }
       var origin = event.target && event.target.nodeType === 1 ? event.target : null;
       var button = origin && origin.closest ? origin.closest('button, [role="button"], [aria-label]') : null;
       if (button && (button.classList.contains('kiteChainClose') || button.id === 'chainClose' || button.classList.contains('kiteSettingsClose'))) return;
@@ -2631,6 +2708,33 @@
       installEdges();
     }).observe(host, { childList: true, attributes: true, attributeFilter: ['class', 'hidden'] });
   }
+  function bootAutoLevels() {
+    if (document.documentElement.dataset.kiteLevelsBoot === '1') return;
+    document.documentElement.dataset.kiteLevelsBoot = '1';
+    watchTicketDismiss();
+    sweepAutoLevels();
+    var passes = 0;
+    var timer = setInterval(function () {
+      sweepAutoLevels();
+      if (++passes === 40) {
+        clearInterval(timer);
+        setInterval(sweepAutoLevels, 1000);
+      }
+    }, 250);
+    if (document.body) {
+      new MutationObserver(function (records) {
+        var hit = records.some(function (record) {
+          return Array.prototype.some.call(record.addedNodes || [], function (node) {
+            if (!node || node.nodeType !== 1) return false;
+            if (node.tagName === 'DIALOG' || (node.getAttribute && node.getAttribute('role') === 'dialog')) return true;
+            return /auto trading levels/i.test(node.textContent || '');
+          });
+        });
+        if (hit) sweepAutoLevels();
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+  }
+  bootAutoLevels();
   bindChartLayout();
   var late = document.createElement('style');
   late.textContent = 'html body.kite-clean .order-card>:not(.kiteRow):not(.kiteRow2):not(.kiteBlock),html body.kite-clean .exec>:not(.kiteRow):not(.kiteRow2):not(.kiteBlock),html body.kite-clean .manual-heading,html body.kite-clean .manual-brokers,html body.kite-clean .manual-note,html body.kite-clean .manual-badge,html body.kite-clean .manual-trade,html body.kite-clean .manual-card-header,html body.kite-clean .manual-input-row,html body.kite-clean .manual-size-line,html body.kite-clean .manual-quantity,html body.kite-clean .separate-mtm-row,html body.kite-clean .manual-inline-status,html body.kite-clean .manual-accounts,html body.kite-clean .manual-card-details,html body.kite-clean .manual-trail-group,html body.kite-clean .manual-trail-bar,html body.kite-clean .levels,html body.kite-clean .chip,html body.kite-clean .manual-result,html body.kite-clean .manual-hint,html body.kite-clean .card-target,html body.kite-clean .entry-options,html body.kite-clean .card-bottom{display:none!important;}'
@@ -2694,7 +2798,7 @@
     + 'html body.kite-clean #kiteSettingsPop .manual-trail-bar label,html body.kite-clean #kiteSettingsPop .manual-trail-bar select,html body.kite-clean #kiteSettingsPop .manual-trail-bar input,html body.kite-clean #kiteSettingsPop .manual-trail-bar button,html body.kite-clean .manual-trail-bar.kite-settings-open label,html body.kite-clean .manual-trail-bar.kite-settings-open select,html body.kite-clean .manual-trail-bar.kite-settings-open input,html body.kite-clean .manual-trail-bar.kite-settings-open button{background:var(--screen-alt,#edf1f6)!important;color:var(--ink,#243348)!important;border:1px solid var(--screen-edge,#c8d1de)!important;}'
     + 'html body.kite-clean dialog.mtm-dialog{display:block!important;}'
     + 'html body.kite-clean dialog.mtm-dialog:not([open]){display:none!important;}'
-    + 'html body.kite-clean dialog.mtm-dialog.kite-dismissed,html body.kite-clean dialog.mtm-dialog[data-kite-dismissed="1"],html body.kite-clean [data-kite-auto-levels="1"][data-kite-dismissed="1"]{display:none!important;}'
+    + 'html body.kite-clean dialog.mtm-dialog.kite-dismissed,html body.kite-clean dialog.mtm-dialog[data-kite-dismissed="1"],html body.kite-clean [data-kite-auto-levels="1"][data-kite-dismissed="1"],html body.kite-clean [data-kite-auto-levels="1"]:not([data-kite-levels-open="1"]){display:none!important;}'
     + 'html body.kite-clean .kiteLimit{display:inline-flex!important;align-items:center!important;gap:4px!important;min-width:0!important;margin:0!important;color:#1f2937!important;}'
     + 'html body.kite-clean .kiteRow .kiteOrderType{display:inline-block!important;visibility:visible!important;opacity:1!important;height:26px!important;min-width:76px!important;max-width:none!important;padding:0 6px!important;font-size:12px!important;font-weight:650!important;line-height:24px!important;border:1px solid #c5ced8!important;border-radius:2px!important;background:#fff!important;color:#1f2937!important;-webkit-appearance:auto!important;appearance:auto!important;}'
     + 'html body.kite-clean .kiteRow .kiteOrderType option{color:#1f2937!important;background:#fff!important;font-size:12px!important;}'
