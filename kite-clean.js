@@ -1698,7 +1698,73 @@
   }
   function isCloseLabel(button) {
     var label = ((button.getAttribute('aria-label') || '') + ' ' + (button.textContent || '')).replace(/\s+/g, ' ').trim().toLowerCase();
-    return label === 'close' || label === 'x' || label === '×' || label === '✕' || label === 'close card';
+    if (label === 'close' || label === 'x' || label === '×' || label === '✕' || label === '✖' || label === 'close card') return true;
+    return /^close\b/.test(label) && label.length < 22;
+  }
+  function isDialogShell(node) {
+    if (!node || node === document.body) return false;
+    var role = node.getAttribute('role') || '';
+    if (node.tagName === 'DIALOG' || role === 'dialog' || role === 'alertdialog') return true;
+    if (/dialog|modal|sheet|popup|overlay/i.test(String(node.className || ''))) return true;
+    try {
+      var style = window.getComputedStyle(node);
+      if (style.position === 'fixed' && node.offsetWidth > 240 && node.offsetHeight > 160) return true;
+    } catch (err) {}
+    return false;
+  }
+  function autoLevelsDialog(from) {
+    var node = from && from.nodeType === 1 ? from : null;
+    while (node && node !== document.body && node !== document.documentElement) {
+      if (node.id === 'kiteClean' || node.id === 'kiteCharts' || node.id === 'kiteStage') return null;
+      if (isDialogShell(node) && /auto trading levels/i.test(node.textContent || '')) return node;
+      node = node.parentElement;
+    }
+    return null;
+  }
+  function closeAutoLevels(dialog) {
+    if (!dialog) return;
+    if (dialog.dataset.kiteDismissed === '1' && dialog.hidden && !dialog.open && dialog.style.display === 'none') return;
+    watchAutoLevelsDialog(dialog);
+    dialog.dataset.kiteAutoLevels = '1';
+    dialog.dataset.kiteDismissed = '1';
+    dialog.dataset.kiteClosedAt = String(Date.now());
+    dialog.classList.add('kite-dismissed');
+    dialog.hidden = true;
+    dialog.removeAttribute('open');
+    if (typeof dialog.close === 'function') {
+      try { dialog.close(); } catch (err) {}
+    }
+    dialog.style.setProperty('display', 'none', 'important');
+  }
+  function releaseAutoLevels(dialog) {
+    if (!dialog) return;
+    dialog.dataset.kiteDismissed = '';
+    dialog.classList.remove('kite-dismissed');
+    dialog.hidden = false;
+    dialog.style.removeProperty('display');
+  }
+  function closeControl(node) {
+    var el = node && node.nodeType === 1 ? node : null;
+    while (el && el !== document.body) {
+      if (isCloseLabel(el)) return el;
+      if (el.tagName === 'DIALOG' || (el.getAttribute('role') || '') === 'dialog') break;
+      el = el.parentElement;
+    }
+    return null;
+  }
+  function watchAutoLevelsDialog(dialog) {
+    if (!dialog || dialog.dataset.kiteAutoWatch === '1') return;
+    dialog.dataset.kiteAutoWatch = '1';
+    dialog.dataset.kiteAutoLevels = '1';
+    new MutationObserver(function () {
+      if (dialog.dataset.kiteDismissed !== '1') return;
+      var closedAt = Number(dialog.dataset.kiteClosedAt || 0);
+      var bouncing = closedAt && Date.now() - closedAt < 500;
+      var showing = dialog.open || dialog.hasAttribute('open') || dialog.hidden === false || (dialog.style.display && dialog.style.display !== 'none');
+      if (!showing) return;
+      if (bouncing) closeAutoLevels(dialog);
+      else releaseAutoLevels(dialog);
+    }).observe(dialog, { attributes: true, attributeFilter: ['open', 'hidden', 'style', 'class'] });
   }
   function modeCardFrom(node) {
     var elNode = node;
@@ -1754,18 +1820,48 @@
   function watchTicketDismiss() {
     if (document.documentElement.dataset.kiteDismissWatch === '1') return;
     document.documentElement.dataset.kiteDismissWatch = '1';
+    if (window.HTMLDialogElement && !window.HTMLDialogElement.prototype.kiteShowModal) {
+      window.HTMLDialogElement.prototype.kiteShowModal = true;
+      ['showModal', 'show'].forEach(function (name) {
+        var native = window.HTMLDialogElement.prototype[name];
+        if (typeof native !== 'function') return;
+        window.HTMLDialogElement.prototype[name] = function () {
+          var closedAt = Number(this.dataset.kiteClosedAt || 0);
+          if (closedAt && Date.now() - closedAt < 500) return;
+          releaseAutoLevels(this);
+          return native.apply(this, arguments);
+        };
+      });
+    }
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape') return;
+      document.querySelectorAll('dialog[open], [role="dialog"]').forEach(function (dialog) {
+        if (/auto trading levels/i.test(dialog.textContent || '')) closeAutoLevels(dialog);
+      });
+    });
     document.addEventListener('click', function (event) {
-      var button = event.target.closest && event.target.closest('button, [role="button"]');
-      if (!button || button.classList.contains('kiteChainClose') || button.id === 'chainClose' || button.classList.contains('kiteSettingsClose')) return;
-      if (button.classList.contains('kiteTicketClose')) {
+      var origin = event.target && event.target.nodeType === 1 ? event.target : null;
+      var button = origin && origin.closest ? origin.closest('button, [role="button"], [aria-label]') : null;
+      if (button && (button.classList.contains('kiteChainClose') || button.id === 'chainClose' || button.classList.contains('kiteSettingsClose'))) return;
+      if (button && button.classList.contains('kiteTicketClose')) {
         event.preventDefault();
         dismissTicket(button);
         return;
       }
-      if (!isCloseLabel(button)) return;
+      var levels = autoLevelsDialog(origin);
+      if (!levels && event.target && event.target.tagName === 'DIALOG' && /auto trading levels/i.test(event.target.textContent || '')) levels = event.target;
+      var closer = closeControl(origin);
+      if (levels && (closer || event.target === levels)) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeAutoLevels(levels);
+        return;
+      }
+      if (levels) watchAutoLevelsDialog(levels);
+      if (!button || !isCloseLabel(button)) return;
       var modeCard = modeCardFrom(button);
       var ticket = button.closest('.order-card, .exec, .manual-controls, #kiteCall, #kitePut');
-      if (modeCard) {
+      if (modeCard && modeCard !== levels) {
         modeCard.dataset.kiteDismissed = '1';
         modeCard.classList.add('kite-dismissed');
       }
@@ -1774,6 +1870,9 @@
     applyStoredTicketDismiss();
     var scans = 0;
     var timer = setInterval(function () {
+      document.querySelectorAll('dialog, [role="dialog"]').forEach(function (dialog) {
+        if (/auto trading levels/i.test(dialog.textContent || '')) watchAutoLevelsDialog(dialog);
+      });
       document.querySelectorAll('.order-card, .exec').forEach(ensureTicketClose);
       document.querySelectorAll('button, [role="tab"]').forEach(function (button) {
         var card = modeCardFrom(button);
@@ -2595,6 +2694,7 @@
     + 'html body.kite-clean #kiteSettingsPop .manual-trail-bar label,html body.kite-clean #kiteSettingsPop .manual-trail-bar select,html body.kite-clean #kiteSettingsPop .manual-trail-bar input,html body.kite-clean #kiteSettingsPop .manual-trail-bar button,html body.kite-clean .manual-trail-bar.kite-settings-open label,html body.kite-clean .manual-trail-bar.kite-settings-open select,html body.kite-clean .manual-trail-bar.kite-settings-open input,html body.kite-clean .manual-trail-bar.kite-settings-open button{background:var(--screen-alt,#edf1f6)!important;color:var(--ink,#243348)!important;border:1px solid var(--screen-edge,#c8d1de)!important;}'
     + 'html body.kite-clean dialog.mtm-dialog{display:block!important;}'
     + 'html body.kite-clean dialog.mtm-dialog:not([open]){display:none!important;}'
+    + 'html body.kite-clean dialog.mtm-dialog.kite-dismissed,html body.kite-clean dialog.mtm-dialog[data-kite-dismissed="1"],html body.kite-clean [data-kite-auto-levels="1"][data-kite-dismissed="1"]{display:none!important;}'
     + 'html body.kite-clean .kiteLimit{display:inline-flex!important;align-items:center!important;gap:4px!important;min-width:0!important;margin:0!important;color:#1f2937!important;}'
     + 'html body.kite-clean .kiteRow .kiteOrderType{display:inline-block!important;visibility:visible!important;opacity:1!important;height:26px!important;min-width:76px!important;max-width:none!important;padding:0 6px!important;font-size:12px!important;font-weight:650!important;line-height:24px!important;border:1px solid #c5ced8!important;border-radius:2px!important;background:#fff!important;color:#1f2937!important;-webkit-appearance:auto!important;appearance:auto!important;}'
     + 'html body.kite-clean .kiteRow .kiteOrderType option{color:#1f2937!important;background:#fff!important;font-size:12px!important;}'
