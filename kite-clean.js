@@ -1777,9 +1777,10 @@
       seen.push(root);
       roots.push(root);
     }
-    document.querySelectorAll('dialog, [role="dialog"]').forEach(function (dialog) {
+    document.querySelectorAll('dialog.auto-levels-dialog, dialog, [role="dialog"]').forEach(function (dialog) {
       if (seen.indexOf(dialog) >= 0) return;
-      if (!/auto trading levels/i.test(dialog.textContent || '')) return;
+      var named = dialog.classList && dialog.classList.contains('auto-levels-dialog');
+      if (!named && !/auto trading levels/i.test(dialog.textContent || '')) return;
       seen.push(dialog);
       roots.push(dialog);
     });
