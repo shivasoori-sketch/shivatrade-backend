@@ -2,9 +2,15 @@
 from __future__ import annotations
 
 import html
-from decimal import Decimal, ROUND_HALF_UP
+import json
 
 from shivai_r3.snapshot import InstrumentView, close_views, session_views
+
+_LIBRARY = "vendor/lightweight-charts.standalone.production.js"
+_UPSTOX_CALL = (
+    "GET https://api.upstox.com/v3/historical-candle/"
+    "{instrument_key}/minutes/3/{to_date}/{from_date}"
+)
 
 _CSS = """
 * { box-sizing: border-box; }
@@ -35,11 +41,15 @@ header dt { color: #475569; font-size: 13px; font-weight: 650; }
 header dd { min-height: 1.4em; font-size: 18px; font-weight: 700; }
 .split { display: flex; flex: 1; min-height: 0; align-items: stretch; }
 .chart, .rows { width: 50%; flex: 1 1 50%; min-width: 0; min-height: 0; }
-.chart { border-right: 1px solid #dbe3ee; display: flex; flex-direction: column; padding: 8px 12px 8px 16px; }
-.chart svg { width: 100%; height: 100%; flex: 1; display: block; min-height: 28rem; }
+.chart { border-right: 1px solid #dbe3ee; display: flex; flex-direction: column; padding: 8px 12px 12px 16px; }
+.lw-chart { width: 100%; flex: 1; display: block; min-height: 28rem; }
+.chart-name, .seq, .chart-note { margin: 0; }
+.chart-name, .seq { padding: 4px 0; }
+.chart-note { padding-top: 8px; color: #475569; font-size: 14px; }
 .rows { margin: 0; padding: 0; display: flex; flex-direction: column; }
+.rows .seq { padding: 12px 28px 0; }
 .rows div { flex: 1 1 0; display: flex; align-items: center; gap: 16px; min-height: 4.75rem; padding: 0 28px; border-bottom: 1px solid #e2e8f0; }
-.rows strong { width: 16rem; flex: 0 0 16rem; font-size: 15px; }
+.rows strong { width: 19rem; flex: 0 0 19rem; font-size: 15px; white-space: nowrap; }
 .rows span { font-size: 20px; font-weight: 700; min-height: 1.2em; }
 @media (max-width: 700px) {
   .split { flex-direction: column; }
@@ -65,51 +75,24 @@ def _header(view: InstrumentView) -> str:
     return f"<header><dl>{cells}</dl></header>"
 
 
-def _svg_y(price: Decimal, upper: Decimal, lower: Decimal) -> str:
-    top, bottom = Decimal(56), Decimal(430)
-    mapped = top + (upper - price) / (upper - lower) * (bottom - top)
-    return format(mapped.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP), "f")
+def _seq(view: InstrumentView) -> str:
+    return f'<p class="seq">snapshot_seq {html.escape(str(view.snapshot_seq))}</p>'
 
 
-def _chart(candle: tuple[str, str, str, str] | None) -> str:
-    # Section 1 chart name. A session with no print has the frame and no bar.
-    frame = (
-        '<svg viewBox="0 0 640 480" role="img">'
-        '<text x="20" y="28" fill="#334155" font-size="14" font-family="sans-serif">3-minute spot</text>'
+def _chart(view: InstrumentView) -> str:
+    # Daily OHLC stays off this series. bars is empty until a 3-minute response exists.
+    note = (
+        "No 3-minute candles are on this machine. "
+        f"source_quality {view.source_quality}. Required call: {_UPSTOX_CALL} "
+        f"with instrument_key {view.instrument_key}."
     )
-    if candle is None:
-        return frame + "</svg>"
-    open_text, high_text, low_text, close_text = candle
-    open_, high, low, close = (Decimal(part) for part in candle)
-    span = high - low or Decimal("1")
-    pad = span * Decimal("0.16")
-    upper, lower = high + pad, low - pad
-    y_open = _svg_y(open_, upper, lower)
-    y_high = _svg_y(high, upper, lower)
-    y_low = _svg_y(low, upper, lower)
-    y_close = _svg_y(close, upper, lower)
-    body_top = y_open if open_ >= close else y_close
-    body_bottom = y_close if open_ >= close else y_open
-    color = "#b42318" if close < open_ else "#047857"
-    series = ",".join(candle)
-    path = (
-        f"M260 {y_high}L260 {y_low}"
-        f"M238 {body_top}L282 {body_top}L282 {body_bottom}L238 {body_bottom}Z"
-    )
-    labels = []
-    for price, y in ((high_text, y_high), (open_text, y_open), (close_text, y_close), (low_text, y_low)):
-        weight = "700" if price == close_text else "500"
-        labels.append(
-            f'<text x="520" y="{y}" fill="#0f172a" font-size="13" font-weight="{weight}" '
-            f'font-family="sans-serif">{html.escape(price)}</text>'
-        )
     return (
-        frame
-        + f'<path class="candle" fill="{color}" stroke="{color}" stroke-width="2" '
-        + f'data-series="{html.escape(series)}" d="{path}"/>'
-        + "".join(labels)
-        + '<text x="220" y="462" fill="#475569" font-size="13" font-family="sans-serif">13 Nov 2026</text>'
-        + "</svg>"
+        '<div class="chart">'
+        '<p class="chart-name">3-minute spot</p>'
+        f"{_seq(view)}"
+        f'<div id="chart-{html.escape(view.instrument)}" class="lw-chart"></div>'
+        f'<p class="chart-note">{html.escape(note)}</p>'
+        "</div>"
     )
 
 
@@ -124,10 +107,45 @@ def _panel(view: InstrumentView) -> str:
         f'<section class="panel panel-{html.escape(view.instrument)}">'
         f"{_header(view)}"
         '<div class="split">'
-        f'<div class="chart">{_chart(view.candle)}</div>'
-        f'<div class="rows">{body}</div>'
+        f"{_chart(view)}"
+        f'<div class="rows">{_seq(view)}{body}</div>'
         "</div>"
         "</section>"
+    )
+
+
+def _library(views: tuple[InstrumentView, ...]) -> str:
+    payload = []
+    for view in views:
+        if view.three_minute_bars or view.chart_overlays:
+            raise ValueError("a level or a 3-minute bar was not computed")
+        payload.append(
+            {
+                "host": f"chart-{view.instrument}",
+                "snapshot_seq": view.snapshot_seq,
+                "bars": [],
+                "price_lines": [],
+                "markers": [],
+            }
+        )
+    data = json.dumps(payload, separators=(",", ":"))
+    return (
+        f'<script src="{_LIBRARY}"></script>'
+        f'<script type="application/json" id="shivai-charts">{data}</script>'
+        "<script>"
+        "var payload=JSON.parse(document.getElementById('shivai-charts').textContent);"
+        "var seq=payload[0].snapshot_seq;"
+        "payload.forEach(function(item){"
+        "if(item.snapshot_seq!==seq){throw new Error('snapshot_seq diverged');}"
+        "var chart=LightweightCharts.createChart(document.getElementById(item.host),"
+        "{autoSize:true,layout:{background:{color:'#ffffff'},textColor:'#0f172a'},"
+        "timeScale:{timeVisible:true,secondsVisible:false}});"
+        "var series=chart.addSeries(LightweightCharts.CandlestickSeries);"
+        "series.setData(item.bars);"
+        "item.price_lines.forEach(function(line){series.createPriceLine(line);});"
+        "if(item.markers.length){series.setMarkers(item.markers);}"
+        "});"
+        "</script>"
     )
 
 
@@ -151,6 +169,7 @@ def _page(views: tuple[InstrumentView, ...]) -> str:
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
         f"<title>SHIVAI</title><style>{_CSS}</style></head><body>"
         f'{"".join(inputs)}{"".join(labels)}{"".join(panels)}'
+        f"{_library(views)}"
         "</body></html>"
     )
 

@@ -28,8 +28,8 @@ ROW_TITLES: tuple[str, ...] = (
     "MARKET STRUCTURE",
     "MOVE OPPORTUNITY",
     "STRIKE INTELLIGENCE",
-    "GUARDIAN STATUS",
-    "PLAN / OUTCOME",
+    "TRADE GUARDIAN",
+    "TRADE PLAN / OUTCOME",
 )
 
 
@@ -51,8 +51,11 @@ class InstrumentView:
     five_rows: tuple[InsightRow, ...]
     entry_eligible: bool
     reject_reasons: tuple[str, ...]
-    # One Friday bar: open, high, low, close. Empty when the session has no print.
+    snapshot_seq: int
+    instrument_key: str
+    # Friday daily OHLC, kept off the chart. A 3-minute series is separate and empty.
     candle: tuple[str, str, str, str] | None = None
+    three_minute_bars: tuple[dict, ...] = ()
 
 
 def _reference_constants() -> dict:
@@ -84,10 +87,12 @@ def _view(
     exchange_date: str,
     source_quality: str,
     snapshot: dict,
+    instrument_key: str,
     candle: tuple[str, str, str, str] | None = None,
 ) -> InstrumentView:
     if source_quality == Quality.LIVE_VERIFIED.value:
         raise ValueError("source_quality cannot be the verified state")
+    # No three_minute_bars.json exists in this package. Do not turn the daily OHLC into bars.
     return InstrumentView(
         instrument=instrument,
         price=price,
@@ -99,7 +104,10 @@ def _view(
         five_rows=_rows(snapshot),
         entry_eligible=snapshot["entry_eligible"],
         reject_reasons=tuple(snapshot["reject_reasons"]),
+        snapshot_seq=snapshot["snapshot_seq"],
+        instrument_key=instrument_key,
         candle=candle,
+        three_minute_bars=(),
     )
 
 
@@ -117,6 +125,7 @@ def close_views() -> tuple[InstrumentView, ...]:
                 close.exchange_timestamp.date().isoformat(),
                 Quality.STALE.value,
                 snapshot,
+                close.instrument_key,
                 (close.open_text, close.high_text, close.low_text, close.close_text),
             )
         )
@@ -130,9 +139,17 @@ def session_views() -> tuple[InstrumentView, ...]:
     A proven socket is not a state this package can enter.
     """
     snapshot = _reference_constants()
+    by_name = {close.instrument: close for close in load_closes()}
     return tuple(
-        _view(label, "", "", Quality.DEGRADED.value, snapshot)
-        for label, _fixture_name in _SELECTOR
+        _view(
+            label,
+            "",
+            "",
+            Quality.DEGRADED.value,
+            snapshot,
+            by_name[fixture_name].instrument_key,
+        )
+        for label, fixture_name in _SELECTOR
     )
 
 
@@ -144,8 +161,11 @@ def to_plain(view: InstrumentView) -> dict:
         "source_quality": view.source_quality,
         "last_valid_tick": view.last_valid_tick,
         "last_engine_assessment": view.last_engine_assessment,
+        "snapshot_seq": view.snapshot_seq,
+        "instrument_key": view.instrument_key,
         "chart_overlays": list(view.chart_overlays),
         "candle": list(view.candle) if view.candle else None,
+        "three_minute_bars": list(view.three_minute_bars),
         "five_rows": [{"title": row.title, "value": row.value} for row in view.five_rows],
         "entry_eligible": view.entry_eligible,
         "reject_reasons": list(view.reject_reasons),

@@ -53,6 +53,8 @@ class CloseViewTests(unittest.TestCase):
             self.assertEqual(view.last_valid_tick, "")
             self.assertEqual(view.last_engine_assessment, "")
             self.assertEqual(view.chart_overlays, ())
+            self.assertEqual(view.three_minute_bars, ())
+            self.assertEqual(view.snapshot_seq, views[0].snapshot_seq)
             self.assertEqual(
                 view.candle,
                 {
@@ -80,6 +82,7 @@ class CloseViewTests(unittest.TestCase):
             self.assertEqual(view.last_valid_tick, "")
             self.assertEqual(view.last_engine_assessment, "")
             self.assertEqual(view.chart_overlays, ())
+            self.assertEqual(view.three_minute_bars, ())
             self.assertIsNone(view.candle)
             self.assertFalse(view.entry_eligible)
             self.assertEqual(view.five_rows[4].value, "NO_VALID_TRADE")
@@ -89,13 +92,31 @@ class CloseViewTests(unittest.TestCase):
         self.assertIn("width: 50%", page)
         self.assertIn("flex-direction: column", page)
         self.assertIn("padding: 16px 28px", page)
-        self.assertEqual(page.count("<path"), 3)
-        self.assertIn(
-            'data-series="25209.85,25246.35,25054.4,25144.3"',
-            page,
-        )
-        self.assertIn('data-series="61300.55,61300.55,60780.55,61034.1"', page)
-        self.assertIn('data-series="81833.78,81879.51,81288.75,81592.45"', page)
+        self.assertIn("lightweight-charts.standalone.production.js", page)
+        self.assertIn("LightweightCharts.CandlestickSeries", page)
+        self.assertIn("series.setData(item.bars)", page)
+        self.assertEqual(page.count('"bars":[]'), 3)
+        self.assertEqual(page.count('"price_lines":[]'), 3)
+        self.assertEqual(page.count('"markers":[]'), 3)
+        self.assertEqual(page.count("snapshot_seq 0"), 6)
+        self.assertIn("/minutes/3/", page)
+        self.assertIn("NSE_INDEX|Nifty 50", page)
+        self.assertIn("NSE_INDEX|Nifty Bank", page)
+        self.assertIn("BSE_INDEX|SENSEX", page)
+        for daily in (
+            "25209.85",
+            "25246.35",
+            "25054.4",
+            "61300.55",
+            "60780.55",
+            "81833.78",
+            "81879.51",
+            "81288.75",
+            "13 Nov 2026",
+        ):
+            self.assertNotIn(daily, page)
+        self.assertNotIn("<path", page)
+        self.assertNotIn("<svg", page)
         self.assertEqual(page.count("3-minute spot"), 3)
         for title in ROW_TITLES:
             self.assertEqual(page.count(title), 3)
@@ -112,8 +133,10 @@ class CloseViewTests(unittest.TestCase):
         self.assertIn("UNDETERMINED", page)
         self.assertIsNone(ABSENT.search(page))
         self.assertNotIn("unused", page)
-        self.assertEqual(page.count("<svg"), 3)
-        self.assertEqual(page.count("13 Nov 2026"), 3)
+        library = (PACKAGE / "vendor" / "lightweight-charts.standalone.production.js").read_text(
+            encoding="utf-8"
+        )[:240]
+        self.assertIn("TradingView Lightweight Charts™ v5.3.0", library)
         nifty = page.find('id="i-NIFTY"')
         self.assertGreater(nifty, 0)
         self.assertLess(nifty, page.find("<nav"))

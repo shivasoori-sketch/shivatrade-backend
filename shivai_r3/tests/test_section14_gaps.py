@@ -121,8 +121,10 @@ class Section14GapTests(unittest.TestCase):
         self.assertFalse(destination.exists())
         self.assertFalse(PUBLIC_ROUTE_AUTHORIZED)
         package = Path(__file__).resolve().parents[1]
-        names = {path.name for path in package.rglob("*") if path.is_file()}
-        self.assertFalse(any(name.endswith((".html", ".js", ".css")) for name in names))
+        names = [path for path in package.rglob("*") if path.is_file()]
+        self.assertFalse(any(path.suffix in {".html", ".css"} for path in names))
+        scripts = [path.name for path in names if path.suffix == ".js"]
+        self.assertEqual(scripts, ["lightweight-charts.standalone.production.js"])
 
     def test_package_has_no_server_entrypoint(self):
         tree = ast.parse((Path(__file__).resolve().parents[1] / "__init__.py").read_text())
