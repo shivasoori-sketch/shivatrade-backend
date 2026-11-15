@@ -461,6 +461,7 @@
       if (chain && chain.open) chain.close();
       parkSummary();
       dressTickets();
+      applyStoredTicketDismiss();
     }
     parkCards();
     window.addEventListener('mc325-chart-loaded', function (event) {
@@ -1622,10 +1623,172 @@
       if (node.nodeType === 3) node.textContent = '';
     });
   }
+  function dismissTicket(node) {
+    var host = node && node.closest ? node.closest('#kiteCall, #kitePut, .order-card, .exec, .manual-controls') : null;
+    var card = host && host.matches && host.matches('.order-card, .exec, .manual-controls') ? host : (host && host.querySelector ? host.querySelector('.order-card, .exec, .manual-controls') : null);
+    [host, card].forEach(function (item) {
+      if (!item || item.id === 'kiteTickets' || item.id === 'kiteClean' || item.id === 'kiteCharts') return;
+      item.dataset.kiteDismissed = '1';
+      item.classList.add('kite-dismissed');
+    });
+    var side = host && host.id === 'kitePut' ? 'PE' : host && host.id === 'kiteCall' ? 'CE' : (card && card.dataset.side) || '';
+    if (side === 'CE' || side === 'PE') {
+      var column = document.getElementById(side === 'CE' ? 'kiteCall' : 'kitePut');
+      if (column) {
+        column.dataset.kiteDismissed = '1';
+        column.classList.add('kite-dismissed');
+      }
+      try { sessionStorage.setItem('kiteTicketDismissed' + side, '1'); } catch (err) {}
+    }
+    ensureTicketRestore();
+  }
+  function ticketDismissed(side) {
+    try { return sessionStorage.getItem('kiteTicketDismissed' + side) === '1'; } catch (err) { return false; }
+  }
+  function restoreTicket(side) {
+    var column = document.getElementById(side === 'PE' ? 'kitePut' : 'kiteCall');
+    if (column) {
+      column.dataset.kiteDismissed = '';
+      column.classList.remove('kite-dismissed');
+      column.querySelectorAll('.order-card, .exec, .manual-controls').forEach(function (card) {
+        card.dataset.kiteDismissed = '';
+        card.classList.remove('kite-dismissed');
+      });
+    }
+    try { sessionStorage.removeItem('kiteTicketDismissed' + side); } catch (err) {}
+    ensureTicketRestore();
+  }
+  function ensureTicketRestore() {
+    var tickets = document.getElementById('kiteTickets');
+    if (!tickets) return;
+    var bar = tickets.querySelector('.kiteTicketRestore');
+    if (!bar) {
+      bar = el('div', '', 'kiteTicketRestore');
+      tickets.append(bar);
+    }
+    bar.replaceChildren();
+    [['CE', 'CALL'], ['PE', 'PUT']].forEach(function (pair) {
+      if (!ticketDismissed(pair[0])) return;
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'kiteTicketRestoreBtn';
+      button.textContent = 'Show ' + pair[1];
+      button.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        restoreTicket(pair[0]);
+      });
+      bar.append(button);
+    });
+    bar.hidden = !bar.childElementCount;
+  }
+  function applyStoredTicketDismiss() {
+    ['CE', 'PE'].forEach(function (side) {
+      if (!ticketDismissed(side)) return;
+      var column = document.getElementById(side === 'PE' ? 'kitePut' : 'kiteCall');
+      if (!column) return;
+      column.dataset.kiteDismissed = '1';
+      column.classList.add('kite-dismissed');
+      column.querySelectorAll('.order-card, .exec, .manual-controls').forEach(function (card) {
+        card.dataset.kiteDismissed = '1';
+        card.classList.add('kite-dismissed');
+      });
+    });
+    ensureTicketRestore();
+  }
+  function isCloseLabel(button) {
+    var label = ((button.getAttribute('aria-label') || '') + ' ' + (button.textContent || '')).replace(/\s+/g, ' ').trim().toLowerCase();
+    return label === 'close' || label === 'x' || label === '×' || label === '✕' || label === 'close card';
+  }
+  function modeCardFrom(node) {
+    var elNode = node;
+    while (elNode && elNode !== document.body) {
+      if (elNode.id === 'kiteClean' || elNode.id === 'kiteCharts' || elNode.id === 'kiteStage' || elNode.id === 'kiteTickets') break;
+      var labels = [];
+      elNode.querySelectorAll('button, [role="tab"]').forEach(function (button) {
+        labels.push((button.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase());
+      });
+      var auto = labels.some(function (text) { return text === 'auto' || text.indexOf('auto ') === 0; });
+      var manual = labels.some(function (text) { return text === 'manual' || text.indexOf('manual ') === 0; });
+      if (auto && manual) return elNode;
+      elNode = elNode.parentElement;
+    }
+    return null;
+  }
+  function ensureTicketClose(card) {
+    if (!card) return;
+    var row = card.querySelector('.kiteRow2') || card.querySelector('.kiteRow') || card;
+    var button = card.querySelector('.kiteTicketClose');
+    if (!button) {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'kiteTicketClose';
+      button.setAttribute('aria-label', 'Close');
+      button.textContent = '✕';
+    }
+    if (button.parentElement !== row) row.append(button);
+    if (button.dataset.kiteClose !== '1') {
+      button.dataset.kiteClose = '1';
+      button.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        dismissTicket(card);
+      });
+    }
+  }
+  function ensureModeCardClose(card) {
+    if (!card || card.querySelector('.kiteModeClose')) return;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'kiteModeClose';
+    button.setAttribute('aria-label', 'Close');
+    button.textContent = '✕';
+    button.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      card.dataset.kiteDismissed = '1';
+      card.classList.add('kite-dismissed');
+    });
+    card.append(button);
+  }
+  function watchTicketDismiss() {
+    if (document.documentElement.dataset.kiteDismissWatch === '1') return;
+    document.documentElement.dataset.kiteDismissWatch = '1';
+    document.addEventListener('click', function (event) {
+      var button = event.target.closest && event.target.closest('button, [role="button"]');
+      if (!button || button.classList.contains('kiteChainClose') || button.id === 'chainClose' || button.classList.contains('kiteSettingsClose')) return;
+      if (button.classList.contains('kiteTicketClose')) {
+        event.preventDefault();
+        dismissTicket(button);
+        return;
+      }
+      if (!isCloseLabel(button)) return;
+      var modeCard = modeCardFrom(button);
+      var ticket = button.closest('.order-card, .exec, .manual-controls, #kiteCall, #kitePut');
+      if (modeCard) {
+        modeCard.dataset.kiteDismissed = '1';
+        modeCard.classList.add('kite-dismissed');
+      }
+      if (ticket) dismissTicket(ticket);
+    }, true);
+    applyStoredTicketDismiss();
+    var scans = 0;
+    var timer = setInterval(function () {
+      document.querySelectorAll('.order-card, .exec').forEach(ensureTicketClose);
+      document.querySelectorAll('button, [role="tab"]').forEach(function (button) {
+        var card = modeCardFrom(button);
+        if (card) ensureModeCardClose(card);
+      });
+      applyStoredTicketDismiss();
+      if (++scans > 20) clearInterval(timer);
+    }, 500);
+  }
   function fillRow2(card) {
     if (!card) return;
     if (card.dataset.kiteRow2 === '1') {
       dressTrail(card);
+      ensureTicketClose(card);
+      applyStoredTicketDismiss();
       return;
     }
     var row2 = card.querySelector('.kiteRow2');
@@ -1675,6 +1838,8 @@
     });
     card.dataset.kiteRow2 = '1';
     dressTrail(card);
+    ensureTicketClose(card);
+    watchTicketDismiss();
   }
   function noteMtm(button) {
     var text = (button.textContent || '').replace(/\s+/g, ' ').trim();
@@ -2439,7 +2604,12 @@
     + 'html body.kite-clean #kiteCharts .grid>.panel,html body.kite-clean #kiteCharts #charts>.chart-card{display:flex!important;flex-direction:column!important;height:100%!important;min-height:0!important;align-items:stretch!important;}'
     + 'html body.kite-clean #kiteCharts .grid>.panel>.chart,html body.kite-clean #kiteCharts #charts .chart-pane{flex:1 1 auto!important;min-height:0!important;height:auto!important;width:100%!important;}'
     + 'html body.kite-clean #kiteCharts #charts .chart-head,html body.kite-clean #kiteCharts #charts .chart-foot{flex:0 0 auto!important;}'
-    + 'html body.kite-clean #kiteCharts .panel>.panelTop,html body.kite-clean #kiteCharts .panel>.ohlc{top:4px!important;min-height:14px!important;line-height:1.2!important;}';
+    + 'html body.kite-clean #kiteCharts .panel>.panelTop,html body.kite-clean #kiteCharts .panel>.ohlc{top:4px!important;min-height:14px!important;line-height:1.2!important;}'
+    + 'html body.kite-clean .kite-dismissed,html body.kite-clean [data-kite-dismissed="1"]{display:none!important;}'
+    + 'html body.kite-clean .kiteTicketClose,html body.kite-clean .kiteModeClose{margin-left:auto!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;width:26px!important;min-width:26px!important;height:26px!important;padding:0!important;border:0!important;border-radius:4px!important;background:#fee2e2!important;color:#dc2626!important;font-size:14px!important;font-weight:800!important;cursor:pointer!important;flex:0 0 auto!important;}'
+    + 'html body.kite-clean .kiteTicketRestore{display:flex!important;gap:8px!important;align-items:center!important;justify-content:center!important;grid-column:1/-1!important;}'
+    + 'html body.kite-clean .kiteTicketRestore[hidden]{display:none!important;}'
+    + 'html body.kite-clean .kiteTicketRestoreBtn{height:26px!important;padding:0 10px!important;border:1px solid #c5ced8!important;border-radius:4px!important;background:#fff!important;color:#1f2937!important;font-size:12px!important;font-weight:700!important;cursor:pointer!important;}';
   document.body.appendChild(late);
   window.fitKiteCharts = fitKiteCharts;
   parkSummary();
