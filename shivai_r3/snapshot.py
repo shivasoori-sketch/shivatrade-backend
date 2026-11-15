@@ -45,6 +45,7 @@ class InsightRow:
 
 _BAR_TOKEN = re.compile(r"^(?:0|[1-9]\d*)(?:\.\d+)?$")
 _THREE_MINUTE = Path(__file__).resolve().parent / "fixtures" / "three_minute_2026_11_13.json"
+THREE_MINUTE_PATH = _THREE_MINUTE
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,13 @@ class ThreeMinuteBar:
     high: str
     low: str
     close: str
+
+
+@dataclass(frozen=True)
+class ThreeMinuteSession:
+    snapshot_seq: int
+    session_date: str
+    bars: dict[str, tuple[ThreeMinuteBar, ...]]
 
 
 @dataclass(frozen=True)
@@ -76,34 +84,71 @@ class InstrumentView:
     three_minute_bars: tuple[ThreeMinuteBar, ...] = ()
 
 
-def _reference_constants() -> dict:
+def _reference_constants(seq: int = 0) -> dict:
     """Call the reference snapshot once, then drop anything that came from the dummy zone."""
     episode = BreakoutEpisode(
         Zone("unused", 1, "UNUSED", Decimal("1"), "RESISTANCE", 0),
         Decimal("1"),
     )
-    return research_snapshot(0, episode, Quality.STALE)
+    return research_snapshot(seq, episode, Quality.STALE)
 
 
-def _rows(snapshot: dict) -> tuple[InsightRow, ...]:
+def session_structure(bars: tuple[ThreeMinuteBar, ...]) -> str:
+    """Close versus the first 3-minute open, plus complete higher-timeframe counts.
+
+    This does not confirm a swing, a zone, or a level. Those engines are not validated.
+    """
+    if len(bars) < 2:
+        raise ValueError("structure needs the 3-minute series")
+    first = Decimal(bars[0].open)
+    last = Decimal(bars[-1].close)
+    if last < first:
+        relation = "CLOSE_BELOW_OPEN"
+    elif last > first:
+        relation = "CLOSE_ABOVE_OPEN"
+    else:
+        relation = "CLOSE_EQUAL_OPEN"
+    complete_15m = len(bars) // 5
+    complete_1h = len(bars) // 20
+    return (
+        f"{relation} | {complete_1h} complete 1h | {complete_15m} complete 15m | RESEARCH_ONLY"
+    )
+
+
+def _rows(snapshot: dict, bars: tuple[ThreeMinuteBar, ...] = ()) -> tuple[InsightRow, ...]:
     insights = snapshot["five_insights"]
-    # Row 2 is the zone id in the reference. No zone was computed, so the cell stays empty.
-    # Row 3 has no field on the reference snapshot. An empty ranking is empty.
+    if bars:
+        # No zone id and no strike ranking. Both stay RESEARCH_ONLY.
+        structure = session_structure(bars)
+        opportunity = "RESEARCH_ONLY"
+        strike = "RESEARCH_ONLY"
+    else:
+        structure = insights["market_trend"]
+        opportunity = ""
+        strike = ""
     values = (
-        insights["market_trend"],
-        "",
-        "",
+        structure,
+        opportunity,
+        strike,
         insights["trade_guardian"],
         insights["trade_plan"],
     )
     return tuple(InsightRow(title, value) for title, value in zip(ROW_TITLES, values, strict=True))
 
 
-def load_three_minute_bars() -> dict[str, tuple[ThreeMinuteBar, ...]]:
+def load_three_minute_bars() -> ThreeMinuteSession:
     """Last cash session returned by the historical 3-minute call. No other days."""
     payload = json.loads(_THREE_MINUTE.read_text(encoding="utf-8"))
+    return parse_session_payload(payload)
+
+
+def parse_session_payload(payload: dict) -> ThreeMinuteSession:
+    """Validate one stored session. Raises instead of repairing a bar."""
     session_date = payload["session_date"]
     series = payload["series"]
+    seq = payload.get("snapshot_seq", 0)
+    if isinstance(seq, bool) or not isinstance(seq, int) or seq < 0:
+        raise ValueError("snapshot_seq is not a count")
     if set(series) != {close.instrument_key for close in load_closes()}:
         raise ValueError("3-minute series keys do not match the three indexes")
     daily = {
@@ -137,7 +182,7 @@ def load_three_minute_bars() -> dict[str, tuple[ThreeMinuteBar, ...]]:
             if later.unix_s - earlier.unix_s != 180:
                 raise ValueError("3-minute bars are not 180 seconds apart")
         loaded[key] = tuple(bars)
-    return loaded
+    return ThreeMinuteSession(seq, session_date, loaded)
 
 
 def _view(
@@ -158,9 +203,9 @@ def _view(
         exchange_date=exchange_date,
         source_quality=source_quality,
         last_valid_tick="",
-        last_engine_assessment="",
+        last_engine_assessment="RESEARCH_ONLY" if bars else "",
         chart_overlays=(),
-        five_rows=_rows(snapshot),
+        five_rows=_rows(snapshot, bars),
         entry_eligible=snapshot["entry_eligible"],
         reject_reasons=tuple(snapshot["reject_reasons"]),
         snapshot_seq=snapshot["snapshot_seq"],
@@ -172,13 +217,13 @@ def _view(
 
 def close_views() -> tuple[InstrumentView, ...]:
     """Friday closes. source_quality is the reference value STALE."""
-    snapshot = _reference_constants()
     by_name = {close.instrument: close for close in load_closes()}
-    series = load_three_minute_bars()
+    session = load_three_minute_bars()
+    snapshot = _reference_constants(session.snapshot_seq)
     views: list[InstrumentView] = []
     for label, fixture_name in _SELECTOR:
         close: HistoricalClose = by_name[fixture_name]
-        bars = series[close.instrument_key]
+        bars = session.bars[close.instrument_key]
         last = bars[-1]
         views.append(
             _view(

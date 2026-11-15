@@ -88,7 +88,8 @@ def _chart(view: InstrumentView) -> str:
         last = view.three_minute_bars[-1].time_ist[11:16]
         note = (
             f"{len(view.three_minute_bars)} candles · {view.exchange_date} · "
-            f"{first}-{last} IST · {view.instrument_key} · /minutes/3/"
+            f"{first}-{last} IST · {view.instrument_key} · /minutes/3/ · "
+            "Next cash session replaces these bars."
         )
     else:
         note = (

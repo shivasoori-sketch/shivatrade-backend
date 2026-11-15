@@ -65,7 +65,8 @@ class Section14GapTests(unittest.TestCase):
         for view in close_views():
             self.assertEqual(view.chart_overlays, ())
             self.assertFalse(view.entry_eligible)
-            self.assertEqual(view.five_rows[0].value, "UNDETERMINED")
+            self.assertIn("RESEARCH_ONLY", view.five_rows[0].value)
+            self.assertNotEqual(view.five_rows[0].value, "UNDETERMINED")
 
     def test_twenty_prior_bars_do_not_produce_atr(self):
         tape = self.fixture["atr_tape"]
@@ -99,7 +100,7 @@ class Section14GapTests(unittest.TestCase):
         self.assertEqual(D16, "OPEN")
         for view in close_views():
             self.assertEqual(view.reject_reasons, ("ENTRY_POLICY_DISABLED",))
-            self.assertEqual(view.five_rows[2].value, "")
+            self.assertEqual(view.five_rows[2].value, "RESEARCH_ONLY")
 
     def test_guardian_does_not_open_and_reference_stop_sticks(self):
         for view in close_views():
