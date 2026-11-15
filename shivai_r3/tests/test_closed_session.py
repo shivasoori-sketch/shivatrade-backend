@@ -79,6 +79,9 @@ class CloseViewTests(unittest.TestCase):
         page = render_closes()
         self.assertIn("width: 50%", page)
         self.assertIn("flex-direction: column", page)
+        self.assertIn('class="candles"', page)
+        self.assertIn('<div class="scale"><b>25144.3</b>', page)
+        self.assertIn("padding: 16px 28px", page)
         self.assertEqual(page.count("3-minute spot"), 3)
         for title in ROW_TITLES:
             self.assertEqual(page.count(title), 3)
