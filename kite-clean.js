@@ -461,6 +461,7 @@
       if (chain && chain.open) chain.close();
       parkSummary();
       dressTickets();
+      applyStoredTicketDismiss();
     }
     parkCards();
     window.addEventListener('mc325-chart-loaded', function (event) {
@@ -1622,10 +1623,349 @@
       if (node.nodeType === 3) node.textContent = '';
     });
   }
+  function dismissTicket(node) {
+    var host = node && node.closest ? node.closest('#kiteCall, #kitePut, .order-card, .exec, .manual-controls') : null;
+    var card = host && host.matches && host.matches('.order-card, .exec, .manual-controls') ? host : (host && host.querySelector ? host.querySelector('.order-card, .exec, .manual-controls') : null);
+    [host, card].forEach(function (item) {
+      if (!item || item.id === 'kiteTickets' || item.id === 'kiteClean' || item.id === 'kiteCharts') return;
+      item.dataset.kiteDismissed = '1';
+      item.classList.add('kite-dismissed');
+    });
+    var side = host && host.id === 'kitePut' ? 'PE' : host && host.id === 'kiteCall' ? 'CE' : (card && card.dataset.side) || '';
+    if (side === 'CE' || side === 'PE') {
+      var column = document.getElementById(side === 'CE' ? 'kiteCall' : 'kitePut');
+      if (column) {
+        column.dataset.kiteDismissed = '1';
+        column.classList.add('kite-dismissed');
+      }
+      try { sessionStorage.setItem('kiteTicketDismissed' + side, '1'); } catch (err) {}
+    }
+    ensureTicketRestore();
+  }
+  function ticketDismissed(side) {
+    try { return sessionStorage.getItem('kiteTicketDismissed' + side) === '1'; } catch (err) { return false; }
+  }
+  function restoreTicket(side) {
+    var column = document.getElementById(side === 'PE' ? 'kitePut' : 'kiteCall');
+    if (column) {
+      column.dataset.kiteDismissed = '';
+      column.classList.remove('kite-dismissed');
+      column.querySelectorAll('.order-card, .exec, .manual-controls').forEach(function (card) {
+        card.dataset.kiteDismissed = '';
+        card.classList.remove('kite-dismissed');
+      });
+    }
+    try { sessionStorage.removeItem('kiteTicketDismissed' + side); } catch (err) {}
+    ensureTicketRestore();
+  }
+  function ensureTicketRestore() {
+    var tickets = document.getElementById('kiteTickets');
+    if (!tickets) return;
+    var bar = tickets.querySelector('.kiteTicketRestore');
+    if (!bar) {
+      bar = el('div', '', 'kiteTicketRestore');
+      tickets.append(bar);
+    }
+    bar.replaceChildren();
+    [['CE', 'CALL'], ['PE', 'PUT']].forEach(function (pair) {
+      if (!ticketDismissed(pair[0])) return;
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'kiteTicketRestoreBtn';
+      button.textContent = 'Show ' + pair[1];
+      button.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        restoreTicket(pair[0]);
+      });
+      bar.append(button);
+    });
+    bar.hidden = !bar.childElementCount;
+  }
+  function applyStoredTicketDismiss() {
+    ['CE', 'PE'].forEach(function (side) {
+      if (!ticketDismissed(side)) return;
+      var column = document.getElementById(side === 'PE' ? 'kitePut' : 'kiteCall');
+      if (!column) return;
+      column.dataset.kiteDismissed = '1';
+      column.classList.add('kite-dismissed');
+      column.querySelectorAll('.order-card, .exec, .manual-controls').forEach(function (card) {
+        card.dataset.kiteDismissed = '1';
+        card.classList.add('kite-dismissed');
+      });
+    });
+    ensureTicketRestore();
+  }
+  function isCloseLabel(button) {
+    var label = ((button.getAttribute('aria-label') || '') + ' ' + (button.textContent || '')).replace(/\s+/g, ' ').trim().toLowerCase();
+    if (label === 'close' || label === 'x' || label === '×' || label === '✕' || label === '✖' || label === 'close card') return true;
+    return /^close\b/.test(label) && label.length < 22;
+  }
+  function isDialogShell(node) {
+    if (!node || node === document.body) return false;
+    var role = node.getAttribute('role') || '';
+    if (node.tagName === 'DIALOG' || role === 'dialog' || role === 'alertdialog') return true;
+    if (/dialog|modal|sheet|popup|overlay/i.test(String(node.className || ''))) return true;
+    try {
+      var style = window.getComputedStyle(node);
+      if (style.position === 'fixed' && node.offsetWidth > 240 && node.offsetHeight > 160) return true;
+    } catch (err) {}
+    return false;
+  }
+  function autoLevelsDialog(from) {
+    var node = from && from.nodeType === 1 ? from : null;
+    while (node && node !== document.body && node !== document.documentElement) {
+      if (node.id === 'kiteClean' || node.id === 'kiteCharts' || node.id === 'kiteStage') return null;
+      if (isDialogShell(node) && /auto trading levels/i.test(node.textContent || '')) return node;
+      node = node.parentElement;
+    }
+    return null;
+  }
+  function closeAutoLevels(dialog) {
+    if (!dialog) return;
+    if (dialog.dataset.kiteDismissed === '1' && dialog.hidden && !dialog.open && dialog.style.display === 'none') return;
+    watchAutoLevelsDialog(dialog);
+    dialog.dataset.kiteAutoLevels = '1';
+    dialog.dataset.kiteDismissed = '1';
+    dialog.dataset.kiteClosedAt = String(Date.now());
+    dialog.dataset.kiteLevelsOpen = '';
+    document.documentElement.dataset.kiteLevelsAsked = '';
+    dialog.classList.add('kite-dismissed');
+    dialog.hidden = true;
+    dialog.removeAttribute('open');
+    if (typeof dialog.close === 'function') {
+      try { dialog.close(); } catch (err) {}
+    }
+    dialog.style.setProperty('display', 'none', 'important');
+  }
+  function releaseAutoLevels(dialog) {
+    if (!dialog) return;
+    dialog.dataset.kiteDismissed = '';
+    dialog.dataset.kiteLevelsOpen = '1';
+    dialog.classList.remove('kite-dismissed');
+    dialog.hidden = false;
+    dialog.style.removeProperty('display');
+  }
+  function levelsAsked() {
+    return document.documentElement.dataset.kiteLevelsAsked === '1';
+  }
+  function panelRoot(from) {
+    var shell = autoLevelsDialog(from);
+    if (shell) return shell;
+    var node = from && from.nodeType === 1 ? from : from && from.parentElement;
+    var best = node;
+    while (node && node.parentElement && node.parentElement !== document.body && node.parentElement !== document.documentElement) {
+      var parent = node.parentElement;
+      if (parent.id === 'kiteClean' || parent.id === 'kiteCharts' || parent.id === 'kiteStage' || parent.id === 'kiteTickets') break;
+      if (parent.querySelector('#chartCE, #chartPE, #chartREF, .tv-lightweight-charts')) break;
+      if (!/auto trading levels/i.test(parent.textContent || '')) break;
+      best = parent;
+      node = parent;
+    }
+    return best;
+  }
+  function findAutoLevelsRoots() {
+    var roots = [];
+    var seen = [];
+    if (!document.body) return roots;
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    var text;
+    while ((text = walker.nextNode())) {
+      if (!/auto trading levels/i.test(text.nodeValue || '')) continue;
+      var root = panelRoot(text.parentElement);
+      if (!root || seen.indexOf(root) >= 0) continue;
+      seen.push(root);
+      roots.push(root);
+    }
+    document.querySelectorAll('dialog.auto-levels-dialog, dialog, [role="dialog"]').forEach(function (dialog) {
+      if (seen.indexOf(dialog) >= 0) return;
+      var named = dialog.classList && dialog.classList.contains('auto-levels-dialog');
+      if (!named && !/auto trading levels/i.test(dialog.textContent || '')) return;
+      seen.push(dialog);
+      roots.push(dialog);
+    });
+    return roots;
+  }
+  function isLevelsOpener(node) {
+    if (!node || !node.closest) return false;
+    var button = node.closest('button, [role="button"], [role="tab"]');
+    if (!button) return false;
+    if (button.closest('[data-kite-auto-levels="1"]')) return false;
+    if (autoLevelsDialog(button)) return false;
+    if (button.classList.contains('kiteMtm') || button.id === 'mtm-open' || button.classList.contains('portfolio-mtm-button')) return true;
+    var label = ((button.getAttribute('aria-label') || '') + ' ' + (button.textContent || '')).replace(/\s+/g, ' ').trim().toLowerCase();
+    return label === 'auto' || label === 'manual' || label === 'levels' || /^mtm\b/.test(label) || /trading levels/.test(label);
+  }
+  function showAutoLevels() {
+    document.documentElement.dataset.kiteLevelsAsked = '1';
+    findAutoLevelsRoots().forEach(function (dialog) {
+      releaseAutoLevels(dialog);
+      if (typeof dialog.showModal === 'function' && !dialog.open) {
+        try { dialog.showModal(); } catch (err) {
+          try { dialog.show(); } catch (err2) {}
+        }
+      }
+    });
+  }
+  function sweepAutoLevels() {
+    if (levelsAsked()) return;
+    findAutoLevelsRoots().forEach(closeAutoLevels);
+  }
+  function closeControl(node) {
+    var el = node && node.nodeType === 1 ? node : null;
+    while (el && el !== document.body) {
+      if (isCloseLabel(el)) return el;
+      if (el.tagName === 'DIALOG' || (el.getAttribute('role') || '') === 'dialog') break;
+      el = el.parentElement;
+    }
+    return null;
+  }
+  function watchAutoLevelsDialog(dialog) {
+    if (!dialog || dialog.dataset.kiteAutoWatch === '1') return;
+    dialog.dataset.kiteAutoWatch = '1';
+    dialog.dataset.kiteAutoLevels = '1';
+    new MutationObserver(function () {
+      if (levelsAsked() || dialog.dataset.kiteDismissed !== '1') return;
+      var showing = dialog.open || dialog.hasAttribute('open') || dialog.hidden === false || (dialog.style.display && dialog.style.display !== 'none');
+      if (showing) closeAutoLevels(dialog);
+    }).observe(dialog, { attributes: true, attributeFilter: ['open', 'hidden', 'style', 'class'] });
+  }
+  function modeCardFrom(node) {
+    var elNode = node;
+    while (elNode && elNode !== document.body) {
+      if (elNode.id === 'kiteClean' || elNode.id === 'kiteCharts' || elNode.id === 'kiteStage' || elNode.id === 'kiteTickets') break;
+      var labels = [];
+      elNode.querySelectorAll('button, [role="tab"]').forEach(function (button) {
+        labels.push((button.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase());
+      });
+      var auto = labels.some(function (text) { return text === 'auto' || text.indexOf('auto ') === 0; });
+      var manual = labels.some(function (text) { return text === 'manual' || text.indexOf('manual ') === 0; });
+      if (auto && manual) return elNode;
+      elNode = elNode.parentElement;
+    }
+    return null;
+  }
+  function ensureTicketClose(card) {
+    if (!card) return;
+    var row = card.querySelector('.kiteRow2') || card.querySelector('.kiteRow') || card;
+    var button = card.querySelector('.kiteTicketClose');
+    if (!button) {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'kiteTicketClose';
+      button.setAttribute('aria-label', 'Close');
+      button.textContent = '✕';
+    }
+    if (button.parentElement !== row) row.append(button);
+    if (button.dataset.kiteClose !== '1') {
+      button.dataset.kiteClose = '1';
+      button.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        dismissTicket(card);
+      });
+    }
+  }
+  function ensureModeCardClose(card) {
+    if (!card || card.querySelector('.kiteModeClose')) return;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'kiteModeClose';
+    button.setAttribute('aria-label', 'Close');
+    button.textContent = '✕';
+    button.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      card.dataset.kiteDismissed = '1';
+      card.classList.add('kite-dismissed');
+    });
+    card.append(button);
+  }
+  function watchTicketDismiss() {
+    if (document.documentElement.dataset.kiteDismissWatch === '1') return;
+    document.documentElement.dataset.kiteDismissWatch = '1';
+    if (window.HTMLDialogElement && !window.HTMLDialogElement.prototype.kiteShowModal) {
+      window.HTMLDialogElement.prototype.kiteShowModal = true;
+      ['showModal', 'show'].forEach(function (name) {
+        var native = window.HTMLDialogElement.prototype[name];
+        if (typeof native !== 'function') return;
+        window.HTMLDialogElement.prototype[name] = function () {
+          var levels = this.dataset.kiteAutoLevels === '1' || /auto trading levels/i.test(this.textContent || '');
+          if (levels && !levelsAsked()) {
+            closeAutoLevels(this);
+            return;
+          }
+          if (levels) releaseAutoLevels(this);
+          return native.apply(this, arguments);
+        };
+      });
+    }
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape') return;
+      document.querySelectorAll('dialog[open], [role="dialog"]').forEach(function (dialog) {
+        if (/auto trading levels/i.test(dialog.textContent || '')) closeAutoLevels(dialog);
+      });
+    });
+    document.addEventListener('click', function (event) {
+      if (event.isTrusted && isLevelsOpener(event.target)) {
+        document.documentElement.dataset.kiteLevelsAsked = '1';
+        setTimeout(function () {
+          if (!levelsAsked()) return;
+          var roots = findAutoLevelsRoots();
+          var shut = !roots.length || roots.every(function (panel) {
+            return panel.dataset.kiteDismissed === '1' || (panel.tagName === 'DIALOG' && !panel.open);
+          });
+          if (shut) showAutoLevels();
+        }, 0);
+      }
+      var origin = event.target && event.target.nodeType === 1 ? event.target : null;
+      var button = origin && origin.closest ? origin.closest('button, [role="button"], [aria-label]') : null;
+      if (button && (button.classList.contains('kiteChainClose') || button.id === 'chainClose' || button.classList.contains('kiteSettingsClose'))) return;
+      if (button && button.classList.contains('kiteTicketClose')) {
+        event.preventDefault();
+        dismissTicket(button);
+        return;
+      }
+      var levels = autoLevelsDialog(origin);
+      if (!levels && event.target && event.target.tagName === 'DIALOG' && /auto trading levels/i.test(event.target.textContent || '')) levels = event.target;
+      var closer = closeControl(origin);
+      if (levels && (closer || event.target === levels)) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeAutoLevels(levels);
+        return;
+      }
+      if (levels) watchAutoLevelsDialog(levels);
+      if (!button || !isCloseLabel(button)) return;
+      var modeCard = modeCardFrom(button);
+      var ticket = button.closest('.order-card, .exec, .manual-controls, #kiteCall, #kitePut');
+      if (modeCard && modeCard !== levels) {
+        modeCard.dataset.kiteDismissed = '1';
+        modeCard.classList.add('kite-dismissed');
+      }
+      if (ticket) dismissTicket(ticket);
+    }, true);
+    applyStoredTicketDismiss();
+    var scans = 0;
+    var timer = setInterval(function () {
+      document.querySelectorAll('dialog, [role="dialog"]').forEach(function (dialog) {
+        if (/auto trading levels/i.test(dialog.textContent || '')) watchAutoLevelsDialog(dialog);
+      });
+      document.querySelectorAll('.order-card, .exec').forEach(ensureTicketClose);
+      document.querySelectorAll('button, [role="tab"]').forEach(function (button) {
+        var card = modeCardFrom(button);
+        if (card) ensureModeCardClose(card);
+      });
+      applyStoredTicketDismiss();
+      if (++scans > 20) clearInterval(timer);
+    }, 500);
+  }
   function fillRow2(card) {
     if (!card) return;
     if (card.dataset.kiteRow2 === '1') {
       dressTrail(card);
+      ensureTicketClose(card);
+      applyStoredTicketDismiss();
       return;
     }
     var row2 = card.querySelector('.kiteRow2');
@@ -1675,6 +2015,8 @@
     });
     card.dataset.kiteRow2 = '1';
     dressTrail(card);
+    ensureTicketClose(card);
+    watchTicketDismiss();
   }
   function noteMtm(button) {
     var text = (button.textContent || '').replace(/\s+/g, ' ').trim();
@@ -2367,6 +2709,33 @@
       installEdges();
     }).observe(host, { childList: true, attributes: true, attributeFilter: ['class', 'hidden'] });
   }
+  function bootAutoLevels() {
+    if (document.documentElement.dataset.kiteLevelsBoot === '1') return;
+    document.documentElement.dataset.kiteLevelsBoot = '1';
+    watchTicketDismiss();
+    sweepAutoLevels();
+    var passes = 0;
+    var timer = setInterval(function () {
+      sweepAutoLevels();
+      if (++passes === 40) {
+        clearInterval(timer);
+        setInterval(sweepAutoLevels, 1000);
+      }
+    }, 250);
+    if (document.body) {
+      new MutationObserver(function (records) {
+        var hit = records.some(function (record) {
+          return Array.prototype.some.call(record.addedNodes || [], function (node) {
+            if (!node || node.nodeType !== 1) return false;
+            if (node.tagName === 'DIALOG' || (node.getAttribute && node.getAttribute('role') === 'dialog')) return true;
+            return /auto trading levels/i.test(node.textContent || '');
+          });
+        });
+        if (hit) sweepAutoLevels();
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+  }
+  bootAutoLevels();
   bindChartLayout();
   var late = document.createElement('style');
   late.textContent = 'html body.kite-clean .order-card>:not(.kiteRow):not(.kiteRow2):not(.kiteBlock),html body.kite-clean .exec>:not(.kiteRow):not(.kiteRow2):not(.kiteBlock),html body.kite-clean .manual-heading,html body.kite-clean .manual-brokers,html body.kite-clean .manual-note,html body.kite-clean .manual-badge,html body.kite-clean .manual-trade,html body.kite-clean .manual-card-header,html body.kite-clean .manual-input-row,html body.kite-clean .manual-size-line,html body.kite-clean .manual-quantity,html body.kite-clean .separate-mtm-row,html body.kite-clean .manual-inline-status,html body.kite-clean .manual-accounts,html body.kite-clean .manual-card-details,html body.kite-clean .manual-trail-group,html body.kite-clean .manual-trail-bar,html body.kite-clean .levels,html body.kite-clean .chip,html body.kite-clean .manual-result,html body.kite-clean .manual-hint,html body.kite-clean .card-target,html body.kite-clean .entry-options,html body.kite-clean .card-bottom{display:none!important;}'
@@ -2430,6 +2799,7 @@
     + 'html body.kite-clean #kiteSettingsPop .manual-trail-bar label,html body.kite-clean #kiteSettingsPop .manual-trail-bar select,html body.kite-clean #kiteSettingsPop .manual-trail-bar input,html body.kite-clean #kiteSettingsPop .manual-trail-bar button,html body.kite-clean .manual-trail-bar.kite-settings-open label,html body.kite-clean .manual-trail-bar.kite-settings-open select,html body.kite-clean .manual-trail-bar.kite-settings-open input,html body.kite-clean .manual-trail-bar.kite-settings-open button{background:var(--screen-alt,#edf1f6)!important;color:var(--ink,#243348)!important;border:1px solid var(--screen-edge,#c8d1de)!important;}'
     + 'html body.kite-clean dialog.mtm-dialog{display:block!important;}'
     + 'html body.kite-clean dialog.mtm-dialog:not([open]){display:none!important;}'
+    + 'html body.kite-clean dialog.mtm-dialog.kite-dismissed,html body.kite-clean dialog.mtm-dialog[data-kite-dismissed="1"],html body.kite-clean [data-kite-auto-levels="1"][data-kite-dismissed="1"],html body.kite-clean [data-kite-auto-levels="1"]:not([data-kite-levels-open="1"]){display:none!important;}'
     + 'html body.kite-clean .kiteLimit{display:inline-flex!important;align-items:center!important;gap:4px!important;min-width:0!important;margin:0!important;color:#1f2937!important;}'
     + 'html body.kite-clean .kiteRow .kiteOrderType{display:inline-block!important;visibility:visible!important;opacity:1!important;height:26px!important;min-width:76px!important;max-width:none!important;padding:0 6px!important;font-size:12px!important;font-weight:650!important;line-height:24px!important;border:1px solid #c5ced8!important;border-radius:2px!important;background:#fff!important;color:#1f2937!important;-webkit-appearance:auto!important;appearance:auto!important;}'
     + 'html body.kite-clean .kiteRow .kiteOrderType option{color:#1f2937!important;background:#fff!important;font-size:12px!important;}'
@@ -2439,7 +2809,12 @@
     + 'html body.kite-clean #kiteCharts .grid>.panel,html body.kite-clean #kiteCharts #charts>.chart-card{display:flex!important;flex-direction:column!important;height:100%!important;min-height:0!important;align-items:stretch!important;}'
     + 'html body.kite-clean #kiteCharts .grid>.panel>.chart,html body.kite-clean #kiteCharts #charts .chart-pane{flex:1 1 auto!important;min-height:0!important;height:auto!important;width:100%!important;}'
     + 'html body.kite-clean #kiteCharts #charts .chart-head,html body.kite-clean #kiteCharts #charts .chart-foot{flex:0 0 auto!important;}'
-    + 'html body.kite-clean #kiteCharts .panel>.panelTop,html body.kite-clean #kiteCharts .panel>.ohlc{top:4px!important;min-height:14px!important;line-height:1.2!important;}';
+    + 'html body.kite-clean #kiteCharts .panel>.panelTop,html body.kite-clean #kiteCharts .panel>.ohlc{top:4px!important;min-height:14px!important;line-height:1.2!important;}'
+    + 'html body.kite-clean .kite-dismissed,html body.kite-clean [data-kite-dismissed="1"]{display:none!important;}'
+    + 'html body.kite-clean .kiteTicketClose,html body.kite-clean .kiteModeClose{margin-left:auto!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;width:26px!important;min-width:26px!important;height:26px!important;padding:0!important;border:0!important;border-radius:4px!important;background:#fee2e2!important;color:#dc2626!important;font-size:14px!important;font-weight:800!important;cursor:pointer!important;flex:0 0 auto!important;}'
+    + 'html body.kite-clean .kiteTicketRestore{display:flex!important;gap:8px!important;align-items:center!important;justify-content:center!important;grid-column:1/-1!important;}'
+    + 'html body.kite-clean .kiteTicketRestore[hidden]{display:none!important;}'
+    + 'html body.kite-clean .kiteTicketRestoreBtn{height:26px!important;padding:0 10px!important;border:1px solid #c5ced8!important;border-radius:4px!important;background:#fff!important;color:#1f2937!important;font-size:12px!important;font-weight:700!important;cursor:pointer!important;}';
   document.body.appendChild(late);
   window.fitKiteCharts = fitKiteCharts;
   parkSummary();
