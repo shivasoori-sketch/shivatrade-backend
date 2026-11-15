@@ -1,0 +1,27 @@
+{
+  "source": "PHASE0_AUDIT_RECORDED_CLOSE",
+  "session_date": "2026-11-13",
+  "price_basis": "SESSION_CLOSE",
+  "audit_api_clock_ist": "2026-11-14T19:54:57+05:30",
+  "audit_api_clock_note": "Saturday response clock from the Phase 0 REST audit. Not an exchange trade time.",
+  "closes": [
+    {
+      "instrument": "NIFTY 50",
+      "instrument_key": "NSE_INDEX|Nifty 50",
+      "close": "25144.3",
+      "exchange_last_trade_time_ist": "2026-11-13T16:00:00+05:30"
+    },
+    {
+      "instrument": "BANKNIFTY",
+      "instrument_key": "NSE_INDEX|Nifty Bank",
+      "close": "61034.1",
+      "exchange_last_trade_time_ist": "2026-11-13T16:00:00+05:30"
+    },
+    {
+      "instrument": "SENSEX",
+      "instrument_key": "BSE_INDEX|SENSEX",
+      "close": "81592.45",
+      "exchange_last_trade_time_ist": "2026-11-13T15:59:59.508+05:30"
+    }
+  ]
+}
