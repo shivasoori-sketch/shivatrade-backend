@@ -93,33 +93,12 @@ def _reference_constants(seq: int = 0) -> dict:
     return research_snapshot(seq, episode, Quality.STALE)
 
 
-def session_structure(bars: tuple[ThreeMinuteBar, ...]) -> str:
-    """Close versus the first 3-minute open, plus complete higher-timeframe counts.
-
-    This does not confirm a swing, a zone, or a level. Those engines are not validated.
-    """
-    if len(bars) < 2:
-        raise ValueError("structure needs the 3-minute series")
-    first = Decimal(bars[0].open)
-    last = Decimal(bars[-1].close)
-    if last < first:
-        relation = "CLOSE_BELOW_OPEN"
-    elif last > first:
-        relation = "CLOSE_ABOVE_OPEN"
-    else:
-        relation = "CLOSE_EQUAL_OPEN"
-    complete_15m = len(bars) // 5
-    complete_1h = len(bars) // 20
-    return (
-        f"{relation} | {complete_1h} complete 1h | {complete_15m} complete 15m | RESEARCH_ONLY"
-    )
-
-
 def _rows(snapshot: dict, bars: tuple[ThreeMinuteBar, ...] = ()) -> tuple[InsightRow, ...]:
     insights = snapshot["five_insights"]
+    # Close versus the first open is a candle statistic, not confirmed structure.
+    structure = insights["market_trend"]
     if bars:
         # No zone id and no strike ranking. Both stay RESEARCH_ONLY.
-        structure = session_structure(bars)
         opportunity = "RESEARCH_ONLY"
         strike = "RESEARCH_ONLY"
     else:

@@ -41,7 +41,7 @@ GAPS: tuple[Section14Gap, ...] = (
     Section14Gap(
         "bos_choch_detector",
         "NOT_IMPLEMENTED",
-        "BOS/CHoCH is not implemented. A 3-minute session may state close versus its first open. That statement draws no level.",
+        "BOS/CHoCH is not implemented. Structure stays UNDETERMINED. A candle statistic is not structure.",
     ),
     Section14Gap(
         "atr_computation",

@@ -65,8 +65,7 @@ class Section14GapTests(unittest.TestCase):
         for view in close_views():
             self.assertEqual(view.chart_overlays, ())
             self.assertFalse(view.entry_eligible)
-            self.assertIn("RESEARCH_ONLY", view.five_rows[0].value)
-            self.assertNotEqual(view.five_rows[0].value, "UNDETERMINED")
+            self.assertEqual(view.five_rows[0].value, "UNDETERMINED")
 
     def test_twenty_prior_bars_do_not_produce_atr(self):
         tape = self.fixture["atr_tape"]
