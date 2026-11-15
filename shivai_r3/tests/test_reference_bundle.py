@@ -42,9 +42,12 @@ class ReferenceBundleTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(completed.stdout.count('"NO VALID TRADE"'), 3)
-        self.assertGreaterEqual(completed.stdout.count('"MARKET_CLOSED"'), 3)
+        self.assertEqual(completed.stdout.count("NO_VALID_TRADE"), 3)
+        self.assertEqual(completed.stdout.count("MARKET STRUCTURE"), 3)
+        self.assertEqual(completed.stdout.count("PLAN / OUTCOME"), 3)
         self.assertNotIn("LIVE_VERIFIED", completed.stdout)
+        self.assertNotIn("DATA_STALE", completed.stdout)
+        self.assertNotIn("CLOSED/HISTORICAL", completed.stdout)
         self.assertNotIn("BUY", completed.stdout)
         self.assertNotIn("SELL", completed.stdout)
 

@@ -1,15 +1,15 @@
-"""Isolated SHIVAI R3 closed-session research package.
+"""Isolated SHIVAI R3 view. main.py does not import this package."""
 
-The server module in main.py does not import this package. There is no
-network client, no order path, and no route.
-"""
-
-__all__ = ["build_closed_snapshots"]
+__all__ = ["close_views", "render_closes"]
 
 
 def __getattr__(name: str):
-    if name == "build_closed_snapshots":
-        from shivai_r3.snapshot import build_closed_snapshots
+    if name == "close_views":
+        from shivai_r3.snapshot import close_views
 
-        return build_closed_snapshots
+        return close_views
+    if name == "render_closes":
+        from shivai_r3.page import render_closes
+
+        return render_closes
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

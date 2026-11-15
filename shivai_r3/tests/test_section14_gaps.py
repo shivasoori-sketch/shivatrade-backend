@@ -23,7 +23,7 @@ from shivai_r3.gaps import (
     swing_event_fixture_count,
 )
 from shivai_r3.reference.shivai_core import OptionQuote, VirtualTrade
-from shivai_r3.snapshot import build_closed_snapshots
+from shivai_r3.snapshot import close_views
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "section14_incomplete.json"
 EXPECTED_GAPS = (
@@ -62,10 +62,10 @@ class Section14GapTests(unittest.TestCase):
         self.assertEqual(read.label, tape["expected_structure"])
         self.assertEqual(list(read.zone_ids), tape["expected_zone_ids"])
         self.assertFalse(read.implemented)
-        for snapshot in build_closed_snapshots():
-            self.assertEqual(snapshot.structure_label, "UNDETERMINED")
-            self.assertEqual(snapshot.zone_ids_and_versions, ())
-            self.assertFalse(snapshot.entry_eligible)
+        for view in close_views():
+            self.assertEqual(view.chart_overlays, ())
+            self.assertFalse(view.entry_eligible)
+            self.assertEqual(view.five_rows[0].value, "UNDETERMINED")
 
     def test_twenty_prior_bars_do_not_produce_atr(self):
         tape = self.fixture["atr_tape"]
@@ -77,17 +77,15 @@ class Section14GapTests(unittest.TestCase):
         self.assertIsNone(atr14_15m_prior(bars))
         self.assertIsNone(atr14_15m_prior(()))
         self.assertIsNone(tape["expected_atr"])
-        for snapshot in build_closed_snapshots():
-            self.assertIn("ATR_UNAVAILABLE", snapshot.reject_reasons)
+        for view in close_views():
+            self.assertNotIn("ATR_UNAVAILABLE", view.reject_reasons)
 
     def test_order_book_depth_is_not_a_rejection_and_flow_is_absent(self):
         for case in self.fixture["order_book_cases"]:
             self.assertEqual(index_depth_rejection(case["depth_levels"]), case["expected_rejection"])
             self.assertEqual(order_book_flow(), case["expected_flow"])
-        for snapshot in build_closed_snapshots():
-            self.assertIsNone(snapshot.depth_rejection)
-            joined = " ".join(snapshot.reject_reasons)
-            self.assertNotIn("DEPTH", joined)
+        for view in close_views():
+            self.assertNotIn("DEPTH", " ".join(view.reject_reasons))
 
     def test_premium_targets_are_not_projected(self):
         targets = project_premium_targets()
@@ -98,23 +96,15 @@ class Section14GapTests(unittest.TestCase):
         self.assertIsNone(targets.t1)
 
     def test_risk_and_fee_model_stay_open(self):
-        for snapshot in build_closed_snapshots():
-            self.assertEqual(snapshot.limits.d16, "OPEN")
-            self.assertIn("OPTION_COST_MODEL_UNAVAILABLE", snapshot.reject_reasons)
-            self.assertIn("RISK_LIMIT_MISSING", snapshot.reject_reasons)
-            self.assertIn("ENTRY_POLICY_DISABLED", snapshot.reject_reasons)
-            self.assertEqual(snapshot.ranked_contracts, ())
+        self.assertEqual(D16, "OPEN")
+        for view in close_views():
+            self.assertEqual(view.reject_reasons, ("ENTRY_POLICY_DISABLED",))
+            self.assertEqual(view.five_rows[2].value, "")
 
     def test_guardian_does_not_open_and_reference_stop_sticks(self):
-        for snapshot in build_closed_snapshots():
-            self.assertIsNone(snapshot.virtual_trade_id)
-            self.assertEqual(snapshot.five_rows[3].text, "DATA_STALE")
-            encoded = json.dumps(
-                {
-                    "rows": [row.text for row in snapshot.five_rows],
-                    "trade": snapshot.virtual_trade_id,
-                }
-            )
+        for view in close_views():
+            self.assertEqual(view.five_rows[3].value, "RESEARCH_ONLY")
+            encoded = " ".join(row.value for row in view.five_rows)
             for state in ("VIRTUAL_OPEN", "HOLD", "CAUTION", "PROTECT", "COMPLETE", "EXIT_TRIGGERED"):
                 self.assertNotIn(state, encoded)
         trade = VirtualTrade("t1", "CE", Decimal("150"), 100, Decimal("135"), Decimal("195"))

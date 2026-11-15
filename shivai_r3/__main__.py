@@ -1,12 +1,11 @@
-"""Print the three closed-session snapshots as JSON. No network."""
+"""Print the three section-1 close views as JSON. No network and no server."""
 import json
 
-from shivai_r3.snapshot import build_closed_snapshots, to_plain
+from shivai_r3.snapshot import close_views, to_plain
 
 
 def main() -> None:
-    payload = [to_plain(snapshot) for snapshot in build_closed_snapshots()]
-    print(json.dumps(payload, indent=2, sort_keys=True))
+    print(json.dumps([to_plain(view) for view in close_views()], indent=2))
 
 
 if __name__ == "__main__":
