@@ -51,6 +51,8 @@ class InstrumentView:
     five_rows: tuple[InsightRow, ...]
     entry_eligible: bool
     reject_reasons: tuple[str, ...]
+    # One Friday bar: open, high, low, close. Empty when the session has no print.
+    candle: tuple[str, str, str, str] | None = None
 
 
 def _reference_constants() -> dict:
@@ -82,6 +84,7 @@ def _view(
     exchange_date: str,
     source_quality: str,
     snapshot: dict,
+    candle: tuple[str, str, str, str] | None = None,
 ) -> InstrumentView:
     if source_quality == Quality.LIVE_VERIFIED.value:
         raise ValueError("source_quality cannot be the verified state")
@@ -96,6 +99,7 @@ def _view(
         five_rows=_rows(snapshot),
         entry_eligible=snapshot["entry_eligible"],
         reject_reasons=tuple(snapshot["reject_reasons"]),
+        candle=candle,
     )
 
 
@@ -113,6 +117,7 @@ def close_views() -> tuple[InstrumentView, ...]:
                 close.exchange_timestamp.date().isoformat(),
                 Quality.STALE.value,
                 snapshot,
+                (close.open_text, close.high_text, close.low_text, close.close_text),
             )
         )
     return tuple(views)
@@ -140,6 +145,7 @@ def to_plain(view: InstrumentView) -> dict:
         "last_valid_tick": view.last_valid_tick,
         "last_engine_assessment": view.last_engine_assessment,
         "chart_overlays": list(view.chart_overlays),
+        "candle": list(view.candle) if view.candle else None,
         "five_rows": [{"title": row.title, "value": row.value} for row in view.five_rows],
         "entry_eligible": view.entry_eligible,
         "reject_reasons": list(view.reject_reasons),

@@ -23,10 +23,23 @@ _EXPECTED_KEYS = (
 )
 
 
+_RECORDED_OHLC = {
+    "NIFTY 50": ("25209.85", "25246.35", "25054.4", "25144.3"),
+    "BANKNIFTY": ("61300.55", "61300.55", "60780.55", "61034.1"),
+    "SENSEX": ("81833.78", "81879.51", "81288.75", "81592.45"),
+}
+
+
 @dataclass(frozen=True)
 class HistoricalClose:
     instrument: str
     instrument_key: str
+    open: Decimal
+    open_text: str
+    high: Decimal
+    high_text: str
+    low: Decimal
+    low_text: str
     close: Decimal
     close_text: str
     exchange_timestamp: datetime
@@ -84,9 +97,16 @@ def load_closes(path: Path | None = None) -> tuple[HistoricalClose, ...]:
         for banned in ("quality", "entry_eligible", "side", "order"):
             if banned in row:
                 raise ValueError(f"close record must not carry {banned}")
-        close = Decimal(row["close"])
-        if close <= 0 or str(close) != row["close"]:
-            raise ValueError("close must be a positive canonical decimal")
+        recorded = _RECORDED_OHLC[row["instrument"]]
+        observed_ohlc = (row["open"], row["high"], row["low"], row["close"])
+        if observed_ohlc != recorded:
+            raise ValueError("OHLC is not the Phase 0 Friday print")
+        prices = tuple(Decimal(text) for text in observed_ohlc)
+        if any(price <= 0 or str(price) != text for price, text in zip(prices, observed_ohlc, strict=True)):
+            raise ValueError("OHLC must be positive canonical decimals")
+        open_, high, low, close = prices
+        if not (low <= min(open_, close) and max(open_, close) <= high):
+            raise ValueError("OHLC is not a single bar")
         exchange = _parse_ist(row["exchange_last_trade_time_ist"])
         if exchange.date().isoformat() != SESSION_DATE:
             raise ValueError("exchange last_trade_time must be Friday 13 Nov 2026")
@@ -98,6 +118,12 @@ def load_closes(path: Path | None = None) -> tuple[HistoricalClose, ...]:
             HistoricalClose(
                 instrument=row["instrument"],
                 instrument_key=row["instrument_key"],
+                open=open_,
+                open_text=row["open"],
+                high=high,
+                high_text=row["high"],
+                low=low,
+                low_text=row["low"],
                 close=close,
                 close_text=row["close"],
                 exchange_timestamp=exchange,

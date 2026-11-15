@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+from decimal import Decimal, ROUND_HALF_UP
 
 from shivai_r3.snapshot import InstrumentView, close_views, session_views
 
@@ -32,13 +33,8 @@ header dt { color: #475569; font-size: 13px; font-weight: 650; }
 header dd { min-height: 1.4em; font-size: 18px; font-weight: 700; }
 .split { display: flex; flex: 1; min-height: 0; align-items: stretch; }
 .chart, .rows { width: 50%; flex: 1 1 50%; min-width: 0; min-height: 0; }
-.chart { border-right: 1px solid #dbe3ee; display: flex; flex-direction: column; padding: 12px 0 12px 16px; }
-.plot { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 6.5rem; grid-template-rows: auto 1fr; }
-.chart-name { grid-column: 1 / -1; margin: 0 0 8px; font-size: 13px; font-weight: 650; }
-.candles { position: relative; background-color: #fff; background-image: repeating-linear-gradient(to bottom, rgba(15,23,42,0.10) 0 1px, transparent 1px 56px), repeating-linear-gradient(to right, rgba(15,23,42,0.06) 0 1px, transparent 1px 48px); border: 1px solid #d5deea; border-right: 0; }
-.scale { position: relative; border: 1px solid #d5deea; border-left: 0; background: #fff; }
-.print { position: absolute; top: 50%; right: 8px; width: 8px; height: 8px; margin-top: -4px; background: #0f172a; border-radius: 50%; }
-.scale b { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); background: #0f172a; color: #fff; font-size: 13px; font-weight: 700; padding: 3px 7px; border-radius: 3px; }
+.chart { border-right: 1px solid #dbe3ee; display: flex; flex-direction: column; padding: 8px 12px 8px 16px; }
+.chart svg { width: 100%; height: 100%; flex: 1; display: block; min-height: 28rem; }
 .rows { margin: 0; padding: 0; display: flex; flex-direction: column; }
 .rows div { flex: 1 1 0; display: flex; align-items: center; gap: 16px; min-height: 4.75rem; padding: 0 28px; border-bottom: 1px solid #e2e8f0; }
 .rows strong { width: 16rem; flex: 0 0 16rem; font-size: 15px; }
@@ -67,19 +63,51 @@ def _header(view: InstrumentView) -> str:
     return f"<header><dl>{cells}</dl></header>"
 
 
-def _chart(price: str) -> str:
-    # One print only. No candle is drawn when open, high, and low were not observed.
-    mark = ""
-    if price:
-        shown = html.escape(price)
-        mark = f'<span class="print"></span></div><div class="scale"><b>{shown}</b></div>'
-    else:
-        mark = '</div><div class="scale"></div>'
+def _svg_y(price: Decimal, upper: Decimal, lower: Decimal) -> str:
+    top, bottom = Decimal(56), Decimal(430)
+    mapped = top + (upper - price) / (upper - lower) * (bottom - top)
+    return format(mapped.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP), "f")
+
+
+def _chart(candle: tuple[str, str, str, str] | None) -> str:
+    # Section 1 chart name. A session with no print has the frame and no bar.
+    frame = (
+        '<svg viewBox="0 0 640 480" role="img">'
+        '<text x="20" y="28" fill="#334155" font-size="14" font-family="sans-serif">3-minute spot</text>'
+    )
+    if candle is None:
+        return frame + "</svg>"
+    open_text, high_text, low_text, close_text = candle
+    open_, high, low, close = (Decimal(part) for part in candle)
+    span = high - low or Decimal("1")
+    pad = span * Decimal("0.16")
+    upper, lower = high + pad, low - pad
+    y_open = _svg_y(open_, upper, lower)
+    y_high = _svg_y(high, upper, lower)
+    y_low = _svg_y(low, upper, lower)
+    y_close = _svg_y(close, upper, lower)
+    body_top = y_open if open_ >= close else y_close
+    body_bottom = y_close if open_ >= close else y_open
+    color = "#b42318" if close < open_ else "#047857"
+    series = ",".join(candle)
+    path = (
+        f"M260 {y_high}L260 {y_low}"
+        f"M238 {body_top}L282 {body_top}L282 {body_bottom}L238 {body_bottom}Z"
+    )
+    labels = []
+    for price, y in ((high_text, y_high), (open_text, y_open), (close_text, y_close), (low_text, y_low)):
+        weight = "700" if price == close_text else "500"
+        labels.append(
+            f'<text x="520" y="{y}" fill="#0f172a" font-size="13" font-weight="{weight}" '
+            f'font-family="sans-serif">{html.escape(price)}</text>'
+        )
     return (
-        '<div class="plot">'
-        '<p class="chart-name">3-minute spot</p>'
-        f'<div class="candles">{mark}'
-        "</div>"
+        frame
+        + f'<path class="candle" fill="{color}" stroke="{color}" stroke-width="2" '
+        + f'data-series="{html.escape(series)}" d="{path}"/>'
+        + "".join(labels)
+        + '<text x="220" y="462" fill="#475569" font-size="13" font-family="sans-serif">13 Nov 2026</text>'
+        + "</svg>"
     )
 
 
@@ -94,7 +122,7 @@ def _panel(view: InstrumentView) -> str:
         f'<section class="panel panel-{html.escape(view.instrument)}">'
         f"{_header(view)}"
         '<div class="split">'
-        f'<div class="chart">{_chart(view.price)}</div>'
+        f'<div class="chart">{_chart(view.candle)}</div>'
         f'<div class="rows">{body}</div>'
         "</div>"
         "</section>"

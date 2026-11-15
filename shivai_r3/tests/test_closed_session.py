@@ -53,6 +53,14 @@ class CloseViewTests(unittest.TestCase):
             self.assertEqual(view.last_valid_tick, "")
             self.assertEqual(view.last_engine_assessment, "")
             self.assertEqual(view.chart_overlays, ())
+            self.assertEqual(
+                view.candle,
+                {
+                    "NIFTY": ("25209.85", "25246.35", "25054.4", "25144.3"),
+                    "BANKNIFTY": ("61300.55", "61300.55", "60780.55", "61034.1"),
+                    "SENSEX": ("81833.78", "81879.51", "81288.75", "81592.45"),
+                }[view.instrument],
+            )
             self.assertFalse(view.entry_eligible)
             self.assertEqual(view.reject_reasons, tuple(dummy["reject_reasons"]))
             self.assertEqual(tuple(row.title for row in view.five_rows), ROW_TITLES)
@@ -72,6 +80,7 @@ class CloseViewTests(unittest.TestCase):
             self.assertEqual(view.last_valid_tick, "")
             self.assertEqual(view.last_engine_assessment, "")
             self.assertEqual(view.chart_overlays, ())
+            self.assertIsNone(view.candle)
             self.assertFalse(view.entry_eligible)
             self.assertEqual(view.five_rows[4].value, "NO_VALID_TRADE")
 
@@ -79,9 +88,14 @@ class CloseViewTests(unittest.TestCase):
         page = render_closes()
         self.assertIn("width: 50%", page)
         self.assertIn("flex-direction: column", page)
-        self.assertIn('class="candles"', page)
-        self.assertIn('<div class="scale"><b>25144.3</b>', page)
         self.assertIn("padding: 16px 28px", page)
+        self.assertEqual(page.count("<path"), 3)
+        self.assertIn(
+            'data-series="25209.85,25246.35,25054.4,25144.3"',
+            page,
+        )
+        self.assertIn('data-series="61300.55,61300.55,60780.55,61034.1"', page)
+        self.assertIn('data-series="81833.78,81879.51,81288.75,81592.45"', page)
         self.assertEqual(page.count("3-minute spot"), 3)
         for title in ROW_TITLES:
             self.assertEqual(page.count(title), 3)
@@ -98,11 +112,13 @@ class CloseViewTests(unittest.TestCase):
         self.assertIn("UNDETERMINED", page)
         self.assertIsNone(ABSENT.search(page))
         self.assertNotIn("unused", page)
-        self.assertNotIn("<svg", page)
+        self.assertEqual(page.count("<svg"), 3)
+        self.assertEqual(page.count("13 Nov 2026"), 3)
         session = render_session()
         self.assertIn(">DEGRADED<", session)
         self.assertIsNone(ABSENT.search(session))
         self.assertNotIn("25144.3", session)
+        self.assertNotIn("<path", session)
 
     def test_build_does_not_open_a_socket(self):
         def boom(*_args, **_kwargs):
