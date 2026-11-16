@@ -1,0 +1,24 @@
+{
+  "bos_tape": {
+    "note": "Rising closes are not treated as a break of structure.",
+    "bars": [
+      {"timeframe_s": 900, "end_ms": 900000, "close": "100"},
+      {"timeframe_s": 900, "end_ms": 1800000, "close": "110"},
+      {"timeframe_s": 900, "end_ms": 2700000, "close": "130"}
+    ],
+    "expected_structure": "UNDETERMINED",
+    "expected_zone_ids": []
+  },
+  "atr_tape": {
+    "note": "Twenty completed 15m closes still do not produce ATR14.",
+    "timeframe_s": 900,
+    "bar_count": 20,
+    "expected_atr": null
+  },
+  "order_book_cases": [
+    {"depth_levels": 0, "expected_rejection": null, "expected_flow": "NOT_IMPLEMENTED"},
+    {"depth_levels": 5, "expected_rejection": null, "expected_flow": "NOT_IMPLEMENTED"}
+  ],
+  "premium": {"t1": null, "t2": null, "t3": null},
+  "swing_event_fixtures_required": 20
+}
