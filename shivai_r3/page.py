@@ -6,7 +6,14 @@ import json
 import re
 from pathlib import Path
 
-from shivai_r3.snapshot import InstrumentView, ThreeMinuteBar, close_views, session_views
+from shivai_r3.snapshot import (
+    InstrumentView,
+    RestQuote,
+    ThreeMinuteBar,
+    close_views,
+    degraded_rest_views,
+    session_views,
+)
 
 _LIBRARY = Path(__file__).resolve().parent / "vendor" / "lightweight-charts.standalone.production.js"
 _DECIMAL = re.compile(r"^(?:0|[1-9]\d*)(?:\.\d+)?$")
@@ -63,14 +70,27 @@ header dd { min-height: 1.4em; font-size: 18px; font-weight: 700; }
 
 
 def _header(view: InstrumentView) -> str:
-    fields = (
-        ("instrument", view.instrument),
-        ("price", view.price),
-        ("exchange date", view.exchange_date),
-        ("source_quality", view.source_quality),
-        ("last valid tick", view.last_valid_tick),
-        ("last engine assessment", view.last_engine_assessment),
-    )
+    if view.source:
+        fields = (
+            ("instrument", view.instrument),
+            ("REST last price", view.price),
+            ("source", view.source),
+            ("source_quality", view.source_quality),
+            ("observation time", view.observation_time),
+            ("last-trade time", view.last_trade_time),
+            ("quote age", view.quote_age),
+            ("entry_eligible", "false" if not view.entry_eligible else "true"),
+            ("policy", "ENTRY_POLICY_DISABLED"),
+        )
+    else:
+        fields = (
+            ("instrument", view.instrument),
+            ("price", view.price),
+            ("exchange date", view.exchange_date),
+            ("source_quality", view.source_quality),
+            ("last valid tick", view.last_valid_tick),
+            ("last engine assessment", view.last_engine_assessment),
+        )
     cells = "".join(
         "<div><dt>{}</dt><dd>{}</dd></div>".format(html.escape(label), html.escape(value))
         for label, value in fields
@@ -86,11 +106,18 @@ def _chart(view: InstrumentView) -> str:
     if view.three_minute_bars:
         first = view.three_minute_bars[0].time_ist[11:16]
         last = view.three_minute_bars[-1].time_ist[11:16]
-        note = (
-            f"{len(view.three_minute_bars)} candles · {view.exchange_date} · "
-            f"{first}-{last} IST · {view.instrument_key} · /minutes/3/ · "
-            "Next cash session replaces these bars."
-        )
+        if view.source:
+            note = (
+                f"{len(view.three_minute_bars)} candles · {view.exchange_date} · "
+                f"{first}-{last} IST · Friday 13 Nov 2026 session · {view.instrument_key} · "
+                "the quote is not a candle"
+            )
+        else:
+            note = (
+                f"{len(view.three_minute_bars)} candles · {view.exchange_date} · "
+                f"{first}-{last} IST · {view.instrument_key} · /minutes/3/ · "
+                "Next cash session replaces these bars."
+            )
     else:
         note = (
             "No 3-minute candles are on this machine. "
@@ -99,7 +126,7 @@ def _chart(view: InstrumentView) -> str:
         )
     return (
         '<div class="chart">'
-        '<p class="chart-name">3-minute spot</p>'
+        f'<p class="chart-name">{html.escape("Friday 13 Nov 2026 session" if view.source else "3-minute spot")}</p>'
         f"{_seq(view)}"
         f'<div id="chart-{html.escape(view.instrument)}" class="lw-chart"></div>'
         f'<p class="chart-note">{html.escape(note)}</p>'
@@ -215,3 +242,7 @@ def render_closes() -> str:
 
 def render_session() -> str:
     return _page(session_views())
+
+
+def render_degraded(quotes: dict[str, RestQuote]) -> str:
+    return _page(degraded_rest_views(quotes))

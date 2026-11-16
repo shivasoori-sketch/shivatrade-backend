@@ -66,6 +66,14 @@ class ThreeMinuteSession:
 
 
 @dataclass(frozen=True)
+class RestQuote:
+    last_price: str
+    observation_time: str
+    last_trade_time: str
+    quote_age: str
+
+
+@dataclass(frozen=True)
 class InstrumentView:
     instrument: str
     price: str
@@ -82,6 +90,10 @@ class InstrumentView:
     # Friday daily OHLC, kept off the chart. three_minute_bars is the API series.
     candle: tuple[str, str, str, str] | None = None
     three_minute_bars: tuple[ThreeMinuteBar, ...] = ()
+    source: str = ""
+    observation_time: str = ""
+    last_trade_time: str = ""
+    quote_age: str = ""
 
 
 def _reference_constants(seq: int = 0) -> dict:
@@ -173,6 +185,10 @@ def _view(
     instrument_key: str,
     candle: tuple[str, str, str, str] | None = None,
     bars: tuple[ThreeMinuteBar, ...] = (),
+    source: str = "",
+    observation_time: str = "",
+    last_trade_time: str = "",
+    quote_age: str = "",
 ) -> InstrumentView:
     if source_quality == Quality.LIVE_VERIFIED.value:
         raise ValueError("source_quality cannot be the verified state")
@@ -191,7 +207,42 @@ def _view(
         instrument_key=instrument_key,
         candle=candle,
         three_minute_bars=bars,
+        source=source,
+        observation_time=observation_time,
+        last_trade_time=last_trade_time,
+        quote_age=quote_age,
     )
+
+
+def degraded_rest_views(quotes: dict[str, RestQuote]) -> tuple[InstrumentView, ...]:
+    """REST quote in the header. Friday bars stay the chart and gain no candle."""
+    session = load_three_minute_bars()
+    snapshot = _reference_constants(session.snapshot_seq)
+    by_name = {close.instrument: close for close in load_closes()}
+    views: list[InstrumentView] = []
+    for label, fixture_name in _SELECTOR:
+        close: HistoricalClose = by_name[fixture_name]
+        quote = quotes[close.instrument_key]
+        if _BAR_TOKEN.fullmatch(quote.last_price) is None:
+            raise ValueError("REST last price is not a decimal")
+        bars = session.bars[close.instrument_key]
+        views.append(
+            _view(
+                label,
+                quote.last_price,
+                bars[-1].time_ist[:10],
+                Quality.DEGRADED.value,
+                snapshot,
+                close.instrument_key,
+                (close.open_text, close.high_text, close.low_text, close.close_text),
+                bars,
+                source="UPSTOX REST",
+                observation_time=quote.observation_time,
+                last_trade_time=quote.last_trade_time,
+                quote_age=quote.quote_age,
+            )
+        )
+    return tuple(views)
 
 
 def close_views() -> tuple[InstrumentView, ...]:
