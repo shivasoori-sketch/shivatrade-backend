@@ -4,6 +4,7 @@ from __future__ import annotations
 import html
 import json
 import re
+from datetime import date
 from pathlib import Path
 
 from shivai_r3.snapshot import (
@@ -12,6 +13,7 @@ from shivai_r3.snapshot import (
     ThreeMinuteBar,
     close_views,
     degraded_rest_views,
+    live_session_views,
     session_views,
 )
 
@@ -21,6 +23,13 @@ _UPSTOX_CALL = (
     "GET https://api.upstox.com/v3/historical-candle/"
     "{instrument_key}/minutes/3/{to_date}/{from_date}"
 )
+_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _session_title(iso_date: str) -> str:
+    day = date.fromisoformat(iso_date)
+    return f"{_WEEKDAYS[day.weekday()]} {day.day} {_MONTHS[day.month - 1]} {day.year} session"
 
 _CSS = """
 * { box-sizing: border-box; }
@@ -70,7 +79,17 @@ header dd { min-height: 1.4em; font-size: 18px; font-weight: 700; }
 
 
 def _header(view: InstrumentView) -> str:
-    if view.source:
+    if view.source == "UPSTOX WEBSOCKET":
+        fields = (
+            ("instrument", view.instrument),
+            ("current price", view.price),
+            ("source", view.source),
+            ("source_quality", view.source_quality),
+            ("feed", "disconnected"),
+            ("entry_eligible", "false"),
+            ("policy", "ENTRY_POLICY_DISABLED"),
+        )
+    elif view.source:
         fields = (
             ("instrument", view.instrument),
             ("REST last price", view.price),
@@ -91,11 +110,19 @@ def _header(view: InstrumentView) -> str:
             ("last valid tick", view.last_valid_tick),
             ("last engine assessment", view.last_engine_assessment),
         )
-    cells = "".join(
-        "<div><dt>{}</dt><dd>{}</dd></div>".format(html.escape(label), html.escape(value))
-        for label, value in fields
-    )
-    return f"<header><dl>{cells}</dl></header>"
+    live_ids = {
+        "current price": "price-",
+        "source_quality": "quality-",
+        "feed": "feed-",
+    }
+    cells = []
+    for label, value in fields:
+        prefix = live_ids.get(label, "")
+        ident = f' id="{prefix}{html.escape(view.instrument)}"' if prefix else ""
+        cells.append(
+            f"<div><dt>{html.escape(label)}</dt><dd{ident}>{html.escape(value)}</dd></div>"
+        )
+    return f"<header><dl>{''.join(cells)}</dl></header>"
 
 
 def _seq(view: InstrumentView) -> str:
@@ -103,22 +130,28 @@ def _seq(view: InstrumentView) -> str:
 
 
 def _chart(view: InstrumentView) -> str:
-    if view.three_minute_bars:
+    if view.source == "UPSTOX WEBSOCKET":
+        name = _session_title(view.exchange_date)
+        note = "3-minute candles form from the websocket after 09:15 IST. A stored session is not drawn."
+    elif view.three_minute_bars:
         first = view.three_minute_bars[0].time_ist[11:16]
         last = view.three_minute_bars[-1].time_ist[11:16]
         if view.source:
+            name = "Friday 13 Nov 2026 session"
             note = (
                 f"{len(view.three_minute_bars)} candles · {view.exchange_date} · "
                 f"{first}-{last} IST · Friday 13 Nov 2026 session · {view.instrument_key} · "
                 "the quote is not a candle"
             )
         else:
+            name = "3-minute spot"
             note = (
                 f"{len(view.three_minute_bars)} candles · {view.exchange_date} · "
                 f"{first}-{last} IST · {view.instrument_key} · /minutes/3/ · "
                 "Next cash session replaces these bars."
             )
     else:
+        name = "3-minute spot"
         note = (
             "No 3-minute candles are on this machine. "
             f"source_quality {view.source_quality}. Required call: {_UPSTOX_CALL} "
@@ -126,7 +159,7 @@ def _chart(view: InstrumentView) -> str:
         )
     return (
         '<div class="chart">'
-        f'<p class="chart-name">{html.escape("Friday 13 Nov 2026 session" if view.source else "3-minute spot")}</p>'
+        f'<p class="chart-name">{html.escape(name)}</p>'
         f"{_seq(view)}"
         f'<div id="chart-{html.escape(view.instrument)}" class="lw-chart"></div>'
         f'<p class="chart-note">{html.escape(note)}</p>'
@@ -184,6 +217,29 @@ def _library(views: tuple[InstrumentView, ...]) -> str:
             '"price_lines":[],"markers":[]}'
         )
     data = "[" + ",".join(items) + "]"
+    live = bool(views) and all(view.source == "UPSTOX WEBSOCKET" for view in views)
+    remember = "window.shivaiSeries=window.shivaiSeries||{};window.shivaiSeries[item.host]=series;" if live else ""
+    poll = (
+        "function applyLive(doc){"
+        "if(!doc||doc.source!=='UPSTOX WEBSOCKET'||!doc.indexes){return;}"
+        "Object.keys(doc.indexes).forEach(function(name){"
+        "var row=doc.indexes[name];"
+        "var price=document.getElementById('price-'+name);"
+        "if(price){price.textContent=row.price||'';}"
+        "var quality=document.getElementById('quality-'+name);"
+        "if(quality){quality.textContent=doc.source_quality||'';}"
+        "var feed=document.getElementById('feed-'+name);"
+        "if(feed){feed.textContent=doc.feed||'';}"
+        "var series=window.shivaiSeries['chart-'+name];"
+        "if(series&&row.candles){series.setData(row.candles);}"
+        "});}"
+        "function poll(){"
+        "fetch('/shivai?live=1',{cache:'no-store',credentials:'same-origin'})"
+        ".then(function(response){if(!response.ok){throw new Error('status');}return response.json();})"
+        ".then(applyLive).catch(function(){});}"
+        "setInterval(poll,5000);poll();"
+        if live else ""
+    )
     return (
         f'<script id="lw-lib">{source}</script>'
         f'<script type="application/json" id="shivai-charts">{data}</script>'
@@ -202,11 +258,13 @@ def _library(views: tuple[InstrumentView, ...]) -> str:
         "localization:{timeFormatter:formatIst},"
         "timeScale:{timeVisible:true,secondsVisible:false,tickMarkFormatter:formatIst}});"
         "var series=chart.addSeries(LightweightCharts.CandlestickSeries);"
+        f"{remember}"
         "series.setData(item.bars);"
         "chart.timeScale().fitContent();"
         "item.price_lines.forEach(function(line){series.createPriceLine(line);});"
         "if(item.markers.length){series.setMarkers(item.markers);}"
         "});"
+        f"{poll}"
         "</script>"
     )
 
@@ -246,3 +304,7 @@ def render_session() -> str:
 
 def render_degraded(quotes: dict[str, RestQuote]) -> str:
     return _page(degraded_rest_views(quotes))
+
+
+def render_live() -> str:
+    return _page(live_session_views())

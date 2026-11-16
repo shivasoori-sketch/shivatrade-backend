@@ -214,6 +214,53 @@ def _view(
     )
 
 
+def live_session_views() -> tuple[InstrumentView, ...]:
+    """Empty Tuesday session. Stored candles are not attached."""
+    snapshot = _reference_constants()
+    if snapshot["entry_eligible"] is not False:
+        raise ValueError("entry must stay disabled")
+    if tuple(snapshot["reject_reasons"]) != ("ENTRY_POLICY_DISABLED",):
+        raise ValueError("entry policy changed")
+    insights = snapshot["five_insights"]
+    if (
+        insights["market_trend"] != "UNDETERMINED"
+        or insights["trade_guardian"] != "RESEARCH_ONLY"
+        or insights["trade_plan"] != "NO_VALID_TRADE"
+    ):
+        raise ValueError("reference rows changed")
+    rows = tuple(
+        InsightRow(title, value)
+        for title, value in zip(
+            ROW_TITLES,
+            ("UNDETERMINED", "RESEARCH_ONLY", "RESEARCH_ONLY", "RESEARCH_ONLY", "NO_VALID_TRADE"),
+            strict=True,
+        )
+    )
+    names = (
+        ("NIFTY", "NSE_INDEX|Nifty 50"),
+        ("BANKNIFTY", "NSE_INDEX|Nifty Bank"),
+        ("SENSEX", "BSE_INDEX|SENSEX"),
+    )
+    return tuple(
+        InstrumentView(
+            instrument=instrument,
+            price="",
+            exchange_date="2026-11-17",
+            source_quality="STALE",
+            last_valid_tick="",
+            last_engine_assessment="",
+            chart_overlays=(),
+            five_rows=rows,
+            entry_eligible=False,
+            reject_reasons=("ENTRY_POLICY_DISABLED",),
+            snapshot_seq=snapshot["snapshot_seq"],
+            instrument_key=key,
+            source="UPSTOX WEBSOCKET",
+        )
+        for instrument, key in names
+    )
+
+
 def degraded_rest_views(quotes: dict[str, RestQuote]) -> tuple[InstrumentView, ...]:
     """REST quote in the header. Friday bars stay the chart and gain no candle."""
     session = load_three_minute_bars()

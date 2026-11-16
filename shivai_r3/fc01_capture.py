@@ -231,6 +231,17 @@ def redact(text: str, secrets: list[str]) -> str:
     return cleaned
 
 
+def subscribe_frame(keys: tuple[str, ...] = KEYS) -> bytes:
+    """UTF-8 JSON on a binary websocket frame. A text frame produced no prices."""
+    return json.dumps(
+        {
+            "guid": str(uuid.uuid4()),
+            "method": "sub",
+            "data": {"mode": "ltpc", "instrumentKeys": list(keys)},
+        }
+    ).encode("utf-8")
+
+
 def decode_frame(raw, pb_module):
     if isinstance(raw, str):
         return json.loads(raw)
@@ -327,15 +338,7 @@ def _stream(uri, token, *, indexes, observations, duration_sec, dry_run, counter
         reason = "nothing_to_record"
         try:
             async with websockets.connect(uri, ping_interval=20, ping_timeout=20, close_timeout=5, max_size=8 * 1024 * 1024) as ws:
-                await ws.send(
-                    json.dumps(
-                        {
-                            "guid": str(uuid.uuid4()),
-                            "method": "sub",
-                            "data": {"mode": "ltpc", "instrumentKeys": list(KEYS)},
-                        }
-                    ).encode("utf-8")
-                )
+                await ws.send(subscribe_frame(KEYS))
                 while datetime.now(timezone.utc) < deadline:
                     timeout = min(idle_sec, max(1, int((deadline - datetime.now(timezone.utc)).total_seconds())))
                     try:
