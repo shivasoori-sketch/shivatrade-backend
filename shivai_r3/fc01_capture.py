@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -329,11 +330,11 @@ def _stream(uri, token, *, indexes, observations, duration_sec, dry_run, counter
                 await ws.send(
                     json.dumps(
                         {
-                            "guid": "fc01",
+                            "guid": str(uuid.uuid4()),
                             "method": "sub",
                             "data": {"mode": "ltpc", "instrumentKeys": list(KEYS)},
                         }
-                    )
+                    ).encode("utf-8")
                 )
                 while datetime.now(timezone.utc) < deadline:
                     timeout = min(idle_sec, max(1, int((deadline - datetime.now(timezone.utc)).total_seconds())))
