@@ -340,6 +340,8 @@ def _stream(uri, token, *, indexes, observations, duration_sec, dry_run, counter
                     try:
                         raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
                     except asyncio.TimeoutError:
+                        if cash_session_open(datetime.now(timezone.utc)) and not dry_run:
+                            continue
                         if dry_run or not any(indexes[key].count for key in KEYS):
                             reason = "nothing_to_record"
                             break
