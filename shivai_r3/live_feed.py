@@ -99,7 +99,7 @@ async def _session(path: Path) -> int:
                         raw = await asyncio.wait_for(ws.recv(), timeout=5)
                     except TimeoutError:
                         quiet = last_tick is None or (datetime.now(IST) - last_tick).total_seconds() > 15
-                        quality = "STALE" if quiet else "DEGRADED"
+                        quality = "STALE" if quiet else "DATA_AVAILABLE"
                         feed = "disconnected" if quiet else "live"
                         publish(live_state(book, feed, quality, prices), path)
                         continue
@@ -123,7 +123,7 @@ async def _session(path: Path) -> int:
                         continue
                     now = time.monotonic()
                     if now - wrote >= 1:
-                        publish(live_state(book, "live", "DEGRADED", prices), path)
+                        publish(live_state(book, "live", "DATA_AVAILABLE", prices), path)
                         wrote = now
         except Exception as exc:
             print(f"feed_error {type(exc).__name__}", file=sys.stderr)

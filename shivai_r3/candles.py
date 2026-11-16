@@ -125,10 +125,16 @@ def chart_point(candle: Candle) -> dict:
 
 
 def live_state(book: CandleBook, feed: str, quality: str, prices: dict[str, str] | None = None) -> dict:
-    if quality not in {"STALE", "DEGRADED"}:
+    """Websocket session only. DEGRADED is the REST quote used when this socket is down."""
+    if quality == "LIVE_VERIFIED":
         raise ValueError("source_quality cannot be the verified state")
     if feed not in {"disconnected", "connecting", "live"}:
         raise ValueError("feed status is not one of the page states")
+    if feed == "live":
+        if quality != "DATA_AVAILABLE":
+            raise ValueError("a delivering socket is DATA_AVAILABLE")
+    elif quality != "STALE":
+        raise ValueError("a quiet socket is STALE")
     shown = prices or {}
     indexes = {}
     for name, key in INDEXES:

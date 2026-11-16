@@ -54,7 +54,7 @@ class CandleTests(unittest.TestCase):
         key = "NSE_INDEX|Nifty 50"
         source.add(key, _ms(9, 15), "100")
         source.add(key, _ms(9, 16), "110")
-        state = live_state(source, "live", "DEGRADED", {key: "110"})
+        state = live_state(source, "live", "DATA_AVAILABLE", {key: "110"})
         restored = CandleBook()
         prices = seed_book(restored, state)
         rows = restored.candles(key)
@@ -83,12 +83,16 @@ class CandleTests(unittest.TestCase):
 
     def test_float_text_keeps_the_index_decimals(self):
         self.assertEqual(as_decimal(25220.1), Decimal("25220.10"))
-        state = live_state(CandleBook(), "live", "DEGRADED", {"NSE_INDEX|Nifty 50": "25220.1"})
+        state = live_state(CandleBook(), "live", "DATA_AVAILABLE", {"NSE_INDEX|Nifty 50": "25220.1"})
         self.assertIn("25220.1", json.dumps(state))
         self.assertFalse(state["entry_eligible"])
-        self.assertEqual(state["source_quality"], "DEGRADED")
+        self.assertEqual(state["policy"], "ENTRY_POLICY_DISABLED")
+        self.assertEqual(state["feed"], "live")
+        self.assertEqual(state["source_quality"], "DATA_AVAILABLE")
         with self.assertRaises(ValueError):
             live_state(CandleBook(), "live", "LIVE_VERIFIED")
+        with self.assertRaises(ValueError):
+            live_state(CandleBook(), "live", "DEGRADED")
 
 
 class PageTests(unittest.TestCase):
@@ -112,6 +116,7 @@ class PageTests(unittest.TestCase):
         self.assertNotIn("81592.45", page)
         self.assertNotIn("Friday", page)
         self.assertNotIn("3-minute spot", page)
+        self.assertNotIn(">DEGRADED<", page)
         self.assertNotIn("LIVE_VERIFIED", page)
         self.assertNotIn("BOS", page)
         self.assertNotIn("CHoCH", page)
